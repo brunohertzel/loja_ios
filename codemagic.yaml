@@ -1,6 +1,6 @@
 workflows:
-  soft-ecommerce-ios:
-    name: Soft Ecommerce iOS
+  soft-ecommerce-ios-debug:
+    name: Soft Ecommerce iOS - Build sem assinatura
 
     max_build_duration: 120
     instance_type: mac_mini_m2
@@ -9,10 +9,6 @@ workflows:
       flutter: stable
       xcode: 26.6
       cocoapods: default
-
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: br.com.softsistemas.softecommerce
 
       vars:
         SOFT_API_BASE_URL: "http://softpinhais.ddns.net:8585/ecommerce/api/mobile/v1"
@@ -23,68 +19,35 @@ workflows:
         - $HOME/Library/Caches/CocoaPods
 
     scripts:
-      - name: Mostrar ambiente
-        script: |
-          echo "=================================================="
-          echo "SOFT ECOMMERCE - BUILD IOS"
-          echo "=================================================="
-          flutter --version
-          dart --version
-          xcodebuild -version
-          echo "Build Codemagic: $BUILD_NUMBER"
-          echo "API: $SOFT_API_BASE_URL"
-          echo "=================================================="
-
-      - name: Preparar projeto iOS
+      - name: Preparar iOS
         script: |
           chmod +x tooling/*.sh || true
-
           ./tooling/prepare_ios.sh "$SOFT_API_BASE_URL"
 
-      - name: Obter dependencias Flutter
+      - name: Dependencias Flutter
         script: |
           flutter pub get
 
-      - name: Instalar CocoaPods
+      - name: CocoaPods
         script: |
           cd ios
           pod install
           cd ..
 
-      - name: Configurar assinatura iOS
-        script: |
-          xcode-project use-profiles
-
-      - name: Mostrar configuracao gerada
-        script: |
-          echo "Bundle ID:"
-          grep -n "PRODUCT_BUNDLE_IDENTIFIER" ios/Runner.xcodeproj/project.pbxproj | head -10 || true
-
-          echo ""
-          echo "Versao:"
-          grep "^version:" pubspec.yaml || true
-
-          echo ""
-          echo "Info.plist:"
-          /usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" ios/Runner/Info.plist || true
-          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" ios/Runner/Info.plist || true
-
-      - name: Analisar projeto Flutter
+      - name: Analisar
         script: |
           flutter analyze
         ignore_failure: true
 
-      - name: Compilar IPA
+      - name: Compilar iOS sem assinatura
         script: |
-          flutter build ipa \
+          flutter build ios \
             --release \
+            --no-codesign \
             --dart-define=SOFT_API_BASE_URL="$SOFT_API_BASE_URL" \
             --build-name=1.6.20 \
-            --build-number=$BUILD_NUMBER \
-            --export-options-plist=/Users/builder/export_options.plist
+            --build-number=$BUILD_NUMBER
 
     artifacts:
-      - build/ios/ipa/*.ipa
-      - build/ios/archive/*.xcarchive
+      - build/ios/iphoneos/Runner.app
       - /tmp/xcodebuild_logs/*.log
-      - flutter_drive.log
