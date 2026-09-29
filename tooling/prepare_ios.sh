@@ -51,7 +51,7 @@ printf '\n[4/9] Bundle ID / nome do app / deployment target\n'
 PBX="ios/Runner.xcodeproj/project.pbxproj"
 # Altera somente o identificador do Runner; RunnerTests continua herdando $(PRODUCT_BUNDLE_IDENTIFIER).
 perl -0pi -e 's/PRODUCT_BUNDLE_IDENTIFIER = (?!\$\()[^;]+;/PRODUCT_BUNDLE_IDENTIFIER = '"$BUNDLE_ID"';/g' "$PBX"
-perl -0pi -e 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]+;/IPHONEOS_DEPLOYMENT_TARGET = 13.0;/g' "$PBX"
+perl -0pi -e 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]+;/IPHONEOS_DEPLOYMENT_TARGET = 15.0;/g' "$PBX"
 if [[ -n "$TEAM_ID" ]]; then
   if grep -q 'DEVELOPMENT_TEAM = ' "$PBX"; then
     perl -0pi -e 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = '"$TEAM_ID"';/g' "$PBX"
