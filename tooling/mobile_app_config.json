@@ -1,0 +1,30 @@
+{
+  "schema": 3,
+  "branding_synced": false,
+  "source_api_base_url": "",
+  "synced_at": "",
+  "app_name": "",
+  "api_base_url": "",
+  "android_package_id": "",
+  "theme_default": "SYSTEM",
+  "primary_color": "#1A73E8",
+  "secondary_color": "#202124",
+  "logo_url": "",
+  "splash_url": "",
+  "icon_android_url": "",
+  "google_web_client_id": "",
+  "google_pay": {
+    "enabled": false,
+    "environment": "TEST",
+    "merchant_id": "",
+    "merchant_name": ""
+  },
+  "release": {
+    "module_version": "",
+    "current_version": "",
+    "current_build": "",
+    "min_version": "",
+    "force_update": false,
+    "store_url": ""
+  }
+}

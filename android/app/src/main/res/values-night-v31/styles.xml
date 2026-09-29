@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="LaunchTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowSplashScreenBackground">@android:color/white</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/soft_splash_transparent</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+    <style name="NormalTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">?android:colorBackground</item>
+    </style>
+</resources>

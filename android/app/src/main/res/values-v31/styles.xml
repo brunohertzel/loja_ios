@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ sempre mostra um splash nativo antes do Flutter iniciar.
+         Enquanto o branding ainda não foi sincronizado no build, usamos um
+         drawable transparente para nunca exibir o ícone Android padrão. -->
+    <style name="LaunchTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowSplashScreenBackground">@android:color/white</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/soft_splash_transparent</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+    <style name="NormalTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">?android:colorBackground</item>
+    </style>
+</resources>
