@@ -52,12 +52,14 @@ PBX="ios/Runner.xcodeproj/project.pbxproj"
 # Altera somente o identificador do Runner; RunnerTests continua herdando $(PRODUCT_BUNDLE_IDENTIFIER).
 perl -0pi -e 's/PRODUCT_BUNDLE_IDENTIFIER = (?!\$\()[^;]+;/PRODUCT_BUNDLE_IDENTIFIER = '"$BUNDLE_ID"';/g' "$PBX"
 perl -0pi -e 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]+;/IPHONEOS_DEPLOYMENT_TARGET = 15.0;/g' "$PBX"
-if [[ -n "$TEAM_ID" ]]; then
-  if grep -q 'DEVELOPMENT_TEAM = ' "$PBX"; then
-    perl -0pi -e 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = '"$TEAM_ID"';/g' "$PBX"
-  else
-    perl -0pi -e 's/(CODE_SIGN_STYLE = Automatic;)/$1\n\t\t\t\tDEVELOPMENT_TEAM = '"$TEAM_ID"';/g' "$PBX"
-  fi
+ODFILE="ios/Podfile"
+
+if grep -q "^platform :ios" "$PODFILE"; then
+  perl -0pi -e "s/platform :ios, '[0-9.]+'/platform :ios, '15.0'/g" "$PODFILE"
+else
+  sed -i '' "1i\\
+platform :ios, '15.0'
+" "$PODFILE"
 fi
 
 PLIST="ios/Runner/Info.plist"
