@@ -1,81 +1,38 @@
 workflows:
-<<<<<<< HEAD
   ios-production:
     name: Soft Ecommerce iOS 1.6.28 produção
     instance_type: mac_mini_m2
     max_build_duration: 60
+
     environment:
       flutter: 3.35.5
       xcode: latest
       cocoapods: default
+
       ios_signing:
         distribution_type: app_store
         bundle_identifier: br.com.softsistemas.domlevi
+
       vars:
         SOFT_BUILD_NUMBER: "186"
         CI: "true"
         FLUTTER_SUPPRESS_ANALYTICS: "true"
+
     scripts:
       - name: Preparar API, branding e projeto iOS
         script: bash tooling/prepare_ios.sh
+
       - name: Aplicar certificados configurados na equipe Codemagic
         script: xcode-project use-profiles
+
       - name: Compilar IPA de produção
-        script: flutter build ipa --release --build-name=1.6.28 --build-number="$SOFT_BUILD_NUMBER" --export-options-plist=/Users/builder/export_options.plist
+        script: |
+          flutter build ipa --release \
+            --build-name=1.6.28 \
+            --build-number="$SOFT_BUILD_NUMBER" \
+            --export-options-plist=/Users/builder/export_options.plist
+
     artifacts:
       - build/ios/ipa/*.ipa
       - build/ios/archive/*.xcarchive
-=======
-  soft-ecommerce-ios-debug:
-    name: Soft Ecommerce iOS - Build sem assinatura
-
-    max_build_duration: 120
-    instance_type: mac_mini_m2
-
-    environment:
-      flutter: stable
-      xcode: 26.6
-      cocoapods: default
-
-      vars:
-        SOFT_API_BASE_URL: "http://softpinhais.ddns.net:8585/ecommerce/api/mobile/v1"
-
-    cache:
-      cache_paths:
-        - $HOME/.pub-cache
-        - $HOME/Library/Caches/CocoaPods
-
-    scripts:
-      - name: Preparar iOS
-        script: |
-          chmod +x tooling/*.sh || true
-          ./tooling/prepare_ios.sh "$SOFT_API_BASE_URL"
-
-      - name: Dependencias Flutter
-        script: |
-          flutter pub get
-
-      - name: CocoaPods
-        script: |
-          cd ios
-          pod install
-          cd ..
-
-      - name: Analisar
-        script: |
-          flutter analyze
-        ignore_failure: true
-
-      - name: Compilar iOS sem assinatura
-        script: |
-          flutter build ios \
-            --release \
-            --no-codesign \
-            --dart-define=SOFT_API_BASE_URL="$SOFT_API_BASE_URL" \
-            --build-name=1.6.20 \
-            --build-number=$BUILD_NUMBER
-
-    artifacts:
-      - build/ios/iphoneos/Runner.app
->>>>>>> ed0e353c93348c6bfceccffd92d1070abbf045d3
       - /tmp/xcodebuild_logs/*.log
