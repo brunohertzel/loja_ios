@@ -1,4 +1,10 @@
-# Versão atual: 1.6.28 (186) — produção
+Versão atual: 1.6.32+190. Leia README_ATUALIZACAO_1.6.32.md para instalação e compilação.
+
+# Entrega atual — 1.6.30
+
+Leia README_ATUALIZACAO_1.6.30.md para instalação e compilação pelo servidor.
+
+# Versão atual: 1.6.29 (187) — produção
 
 Leia `README_IOS_PRODUCAO.md` para a geração de release. As instruções históricas abaixo se referem às versões anteriores.
 

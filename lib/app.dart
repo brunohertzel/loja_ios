@@ -1,3 +1,5 @@
+import 'core/localization/localized_widgets.dart';
+import 'core/localization/locale_controller.dart';
 import 'core/config/platform_info.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -14,6 +16,8 @@ import 'features/auth/auth_repository.dart';
 import 'features/auth/biometric_service.dart';
 import 'features/auth/login_page.dart';
 import 'features/store/store_shell.dart';
+import 'features/store/customer_care_pages.dart';
+import 'features/store/store_repository.dart';
 
 class SoftEcommerceApp extends StatefulWidget {
   const SoftEcommerceApp({super.key});
@@ -22,7 +26,14 @@ class SoftEcommerceApp extends StatefulWidget {
   State<SoftEcommerceApp> createState() => _SoftEcommerceAppState();
 }
 
-enum _AppState { loading, authentication, store, blocked, updateRequired }
+enum _AppState {
+  loading,
+  authentication,
+  legal,
+  store,
+  blocked,
+  updateRequired,
+}
 
 class _SoftEcommerceAppState extends State<SoftEcommerceApp> {
   late final SecureSessionStore _store;
@@ -55,6 +66,7 @@ class _SoftEcommerceAppState extends State<SoftEcommerceApp> {
     }
 
     try {
+      await AppLocaleController.instance.load();
       await _device.initialize();
       final bootstrapJson = await _api.bootstrap();
       final bootstrap = AppBootstrap.fromJson(bootstrapJson);
@@ -87,8 +99,7 @@ class _SoftEcommerceAppState extends State<SoftEcommerceApp> {
       }
 
       if (!bootstrap.platformAllowed) {
-        _message =
-            (PlatformInfo.isIOS
+        _message = (PlatformInfo.isIOS
                 ? bootstrap.iosLicensed
                 : bootstrap.androidLicensed)
             ? '${PlatformInfo.label} está licenciado, mas foi desabilitado no configurador do módulo Mobile.'
@@ -126,6 +137,26 @@ class _SoftEcommerceAppState extends State<SoftEcommerceApp> {
 
   Future<void> _authenticated() async {
     if (!mounted) return;
+    if (_bootstrap?.customerCareEnabled == true) {
+      try {
+        final status = await StoreRepository(
+          _api,
+          auth: _auth,
+        ).careGet('/account/legal.php');
+        if (!mounted) return;
+        if (status['needs_acceptance'] == true) {
+          setState(() => _state = _AppState.legal);
+          return;
+        }
+      } catch (e) {
+        if (mounted)
+          setState(() {
+            _message = 'Não foi possível consultar os termos da loja: $e';
+            _state = _AppState.blocked;
+          });
+        return;
+      }
+    }
     setState(() => _state = _AppState.store);
     await _auth.event('app_open', <String, dynamic>{
       'package': _device.packageName,
@@ -138,25 +169,26 @@ class _SoftEcommerceAppState extends State<SoftEcommerceApp> {
     const primary = GeneratedAppConfig.primaryColor;
     const secondary = GeneratedAppConfig.secondaryColor;
 
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: AppThemeModeController.instance,
-      builder: (context, themeMode, _) => MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: GeneratedAppConfig.appName,
-        theme: AppTheme.lightFromHex(primary, secondary),
-        darkTheme: AppTheme.darkFromHex(primary, secondary),
-        themeMode: themeMode,
-        locale: const Locale('pt', 'BR'),
-        supportedLocales: const [Locale('pt', 'BR')],
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        home: switch (_state) {
-          _AppState.loading => _LoadingPage(bootstrap: bootstrap),
-          _AppState.authentication =>
-            bootstrap == null
+    return ValueListenableBuilder<Locale>(
+      valueListenable: AppLocaleController.instance,
+      builder: (context, locale, _) => ValueListenableBuilder<ThemeMode>(
+        valueListenable: AppThemeModeController.instance,
+        builder: (context, themeMode, _) => MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: GeneratedAppConfig.appName,
+          theme: AppTheme.lightFromHex(primary, secondary),
+          darkTheme: AppTheme.darkFromHex(primary, secondary),
+          themeMode: themeMode,
+          locale: locale,
+          supportedLocales: AppLocaleController.supported,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: switch (_state) {
+            _AppState.loading => _LoadingPage(bootstrap: bootstrap),
+            _AppState.authentication => bootstrap == null
                 ? _LoadingPage(bootstrap: bootstrap)
                 : LoginPage(
                     api: _api,
@@ -167,8 +199,12 @@ class _SoftEcommerceAppState extends State<SoftEcommerceApp> {
                     autoTryBiometric: true,
                     onLoggedIn: _authenticated,
                   ),
-          _AppState.store =>
-            bootstrap == null
+            _AppState.legal => LegalDocumentsPage(
+                repository: StoreRepository(_api, auth: _auth),
+                requireAcceptance: true,
+                onAccepted: _authenticated,
+              ),
+            _AppState.store => bootstrap == null
                 ? _LoadingPage(bootstrap: bootstrap)
                 : StoreShell(
                     api: _api,
@@ -181,21 +217,22 @@ class _SoftEcommerceAppState extends State<SoftEcommerceApp> {
                         setState(() => _state = _AppState.authentication);
                     },
                   ),
-          _AppState.blocked => _MessagePage(
-            icon: Icons.cloud_off,
-            title: 'Não foi possível iniciar',
-            message: _message ?? 'Falha desconhecida.',
-            buttonLabel: 'Tentar novamente',
-            onPressed: _initialize,
-          ),
-          _AppState.updateRequired => _MessagePage(
-            icon: Icons.system_update,
-            title: 'Atualização obrigatória',
-            message: _message ?? 'Atualize o aplicativo para continuar.',
-            buttonLabel: 'Verificar novamente',
-            onPressed: _initialize,
-          ),
-        },
+            _AppState.blocked => _MessagePage(
+                icon: Icons.cloud_off,
+                title: 'Não foi possível iniciar',
+                message: _message ?? 'Falha desconhecida.',
+                buttonLabel: 'Tentar novamente',
+                onPressed: _initialize,
+              ),
+            _AppState.updateRequired => _MessagePage(
+                icon: Icons.system_update,
+                title: 'Atualização obrigatória',
+                message: _message ?? 'Atualize o aplicativo para continuar.',
+                buttonLabel: 'Verificar novamente',
+                onPressed: _initialize,
+              ),
+          },
+        ),
       ),
     );
   }
@@ -280,39 +317,41 @@ class _MessagePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: SafeArea(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Card(
+        body: SafeArea(
+          child: Center(
             child: Padding(
-              padding: const EdgeInsets.all(26),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    icon,
-                    size: 58,
-                    color: Theme.of(context).colorScheme.primary,
+              padding: const EdgeInsets.all(24),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(26),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        icon,
+                        size: 58,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(height: 16),
+                      LText(
+                        title,
+                        textAlign: TextAlign.center,
+                        style:
+                            Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                      ),
+                      const SizedBox(height: 10),
+                      LText(message, textAlign: TextAlign.center),
+                      const SizedBox(height: 20),
+                      FilledButton(
+                          onPressed: onPressed, child: LText(buttonLabel)),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(message, textAlign: TextAlign.center),
-                  const SizedBox(height: 20),
-                  FilledButton(onPressed: onPressed, child: Text(buttonLabel)),
-                ],
+                ),
               ),
             ),
           ),
         ),
-      ),
-    ),
-  );
+      );
 }

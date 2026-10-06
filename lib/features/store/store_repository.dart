@@ -21,6 +21,14 @@ class StoreRepository {
   final ApiClient api;
   final AuthRepository? auth;
 
+  Future<Map<String, dynamic>> careGet(String path) =>
+      _authenticated(() => api.get(path));
+  Future<Map<String, dynamic>> carePost(
+    String path,
+    Map<String, dynamic> body,
+  ) =>
+      _authenticated(() => api.post(path, body));
+
   Future<T> _authenticated<T>(Future<T> Function() action) async {
     try {
       return await action();
@@ -88,13 +96,13 @@ class StoreRepository {
     final products = data is! List
         ? const <StoreProduct>[]
         : data
-              .whereType<Map>()
-              .map(
-                (e) => StoreProduct.fromJson(
-                  e.map((key, value) => MapEntry(key.toString(), value)),
-                ),
-              )
-              .toList(growable: false);
+            .whereType<Map>()
+            .map(
+              (e) => StoreProduct.fromJson(
+                e.map((key, value) => MapEntry(key.toString(), value)),
+              ),
+            )
+            .toList(growable: false);
     return StoreProductsPage(
       products: products,
       page: numberValue(json['page'], fallback: safePage.toDouble()).toInt(),
@@ -124,39 +132,42 @@ class StoreRepository {
     List<Map<String, dynamic>> items, {
     String? addressId,
     String receiptType = 'ENTREGA',
-  }) => _authenticated(
-    () => api.post('/checkout/prepare.php', <String, dynamic>{
-      'items': items,
-      'receipt_type': receiptType,
-      if (addressId != null) 'address_id': addressId,
-    }),
-  );
+  }) =>
+      _authenticated(
+        () => api.post('/checkout/prepare.php', <String, dynamic>{
+          'items': items,
+          'receipt_type': receiptType,
+          if (addressId != null) 'address_id': addressId,
+        }),
+      );
 
   Future<Map<String, dynamic>> checkoutFreight(
     List<Map<String, dynamic>> items, {
     required String addressId,
     required String receiptType,
-  }) => _authenticated(
-    () => api.post('/checkout/freight.php', <String, dynamic>{
-      'items': items,
-      'address_id': addressId,
-      'receipt_type': receiptType,
-    }),
-  );
+  }) =>
+      _authenticated(
+        () => api.post('/checkout/freight.php', <String, dynamic>{
+          'items': items,
+          'address_id': addressId,
+          'receipt_type': receiptType,
+        }),
+      );
 
   Future<Map<String, dynamic>> checkoutCoupon(
     List<Map<String, dynamic>> items, {
     required String code,
     required String addressId,
     required String receiptType,
-  }) => _authenticated(
-    () => api.post('/checkout/coupon.php', <String, dynamic>{
-      'items': items,
-      'code': code,
-      'address_id': addressId,
-      'receipt_type': receiptType,
-    }),
-  );
+  }) =>
+      _authenticated(
+        () => api.post('/checkout/coupon.php', <String, dynamic>{
+          'items': items,
+          'code': code,
+          'address_id': addressId,
+          'receipt_type': receiptType,
+        }),
+      );
 
   Future<Map<String, dynamic>> checkoutSubmit(
     List<Map<String, dynamic>> items, {
@@ -175,32 +186,34 @@ class StoreRepository {
     String? paymentTypeId,
     String? walletToken,
     required String idempotencyKey,
-  }) => _authenticated(
-    () => api.post('/checkout/submit.php', <String, dynamic>{
-      'items': items,
-      'address_id': addressId,
-      'receipt_type': receiptType,
-      'schedule_date': scheduleDate,
-      'payment_id': paymentId,
-      'idempotency_key': idempotencyKey,
-      if (paymentTerm != null && paymentTerm.isNotEmpty)
-        'payment_term': paymentTerm,
-      if (couponCode != null && couponCode.isNotEmpty)
-        'coupon_code': couponCode,
-      if (notes != null && notes.isNotEmpty) 'notes': notes,
-      'needs_change': needsChange,
-      if (needsChange && changeFor != null) 'change_for': changeFor,
-      if (cardToken != null && cardToken.isNotEmpty) 'card_token': cardToken,
-      if (installments != null && installments > 0)
-        'installments': installments,
-      if (paymentMethodId != null && paymentMethodId.isNotEmpty)
-        'payment_method_id': paymentMethodId,
-      if (paymentTypeId != null && paymentTypeId.isNotEmpty)
-        'payment_type_id': paymentTypeId,
-      if (walletToken != null && walletToken.isNotEmpty)
-        'wallet_token': walletToken,
-    }),
-  );
+  }) =>
+      _authenticated(
+        () => api.post('/checkout/submit.php', <String, dynamic>{
+          'items': items,
+          'address_id': addressId,
+          'receipt_type': receiptType,
+          'schedule_date': scheduleDate,
+          'payment_id': paymentId,
+          'idempotency_key': idempotencyKey,
+          if (paymentTerm != null && paymentTerm.isNotEmpty)
+            'payment_term': paymentTerm,
+          if (couponCode != null && couponCode.isNotEmpty)
+            'coupon_code': couponCode,
+          if (notes != null && notes.isNotEmpty) 'notes': notes,
+          'needs_change': needsChange,
+          if (needsChange && changeFor != null) 'change_for': changeFor,
+          if (cardToken != null && cardToken.isNotEmpty)
+            'card_token': cardToken,
+          if (installments != null && installments > 0)
+            'installments': installments,
+          if (paymentMethodId != null && paymentMethodId.isNotEmpty)
+            'payment_method_id': paymentMethodId,
+          if (paymentTypeId != null && paymentTypeId.isNotEmpty)
+            'payment_type_id': paymentTypeId,
+          if (walletToken != null && walletToken.isNotEmpty)
+            'wallet_token': walletToken,
+        }),
+      );
 
   Future<List<Map<String, dynamic>>> orders() async {
     final json = await _authenticated(
@@ -273,6 +286,13 @@ class StoreRepository {
     return listValue(json['addresses']);
   }
 
+  Future<void> saveAddress(Map<String, dynamic> address) async {
+    await _authenticated(() => api.post('/profile.php', {
+          ...address,
+          'resource': 'address_save',
+        }));
+  }
+
   Future<List<StoreProduct>> favorites() async {
     final json = await _authenticated(
       () =>
@@ -341,24 +361,14 @@ class StoreRepository {
     return listValue(json['items']);
   }
 
-  Future<bool> notificationPreference() async {
-    final json = await _authenticated(
-      () => api.post('/profile.php', <String, dynamic>{
-        'resource': 'notification_preference',
-      }),
-    );
-    return boolValue(json['enabled']);
-  }
-
-  Future<bool> setNotificationPreference(bool enabled) async {
-    final json = await _authenticated(
-      () => api.post('/profile.php', <String, dynamic>{
-        'resource': 'notification_preference',
-        'enabled': enabled,
-      }),
-    );
-    return boolValue(json['enabled']);
-  }
+  Future<Map<String, dynamic>> notificationPreference(
+          {bool? enabled, String? permission, String? language}) =>
+      _authenticated(() => api.post('/profile.php', <String, dynamic>{
+            'resource': 'notification_preference',
+            if (enabled != null) 'enabled': enabled,
+            if (permission != null) 'permission_status': permission,
+            if (language != null) 'language_code': language,
+          }));
 
   Future<Map<String, dynamic>> paymentStatus(int orderId) =>
       _authenticated(() => api.get('/payment/status.php?order_id=$orderId'));
@@ -458,8 +468,7 @@ Map<String, dynamic> _normalizeOrderDetailResponse(Map<String, dynamic> json) {
     json['totais'],
   ]);
   if (totals.isNotEmpty) {
-    out['subtotal'] ??=
-        totals['subtotal'] ??
+    out['subtotal'] ??= totals['subtotal'] ??
         totals['products'] ??
         totals['produtos'] ??
         totals['valor_produtos'];
@@ -576,8 +585,7 @@ void _mergeOrderScalars(
       'itens',
       'products',
       'produtos',
-    }.contains(key))
-      return;
+    }.contains(key)) return;
     if (value is Map || value is List) return;
     target[key] = value;
   });

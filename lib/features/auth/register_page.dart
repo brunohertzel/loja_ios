@@ -1,8 +1,11 @@
+import '../../core/localization/localized_widgets.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/models/bootstrap_config.dart';
 import '../../core/network/api_client.dart';
 import 'auth_repository.dart';
+import '../store/customer_care_pages.dart';
+import '../store/store_repository.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({
@@ -41,6 +44,7 @@ class _RegisterPageState extends State<RegisterPage> {
   final _password = TextEditingController();
   final _password2 = TextEditingController();
   bool _accept = false;
+  List<Map<String, dynamic>>? _legalDocuments;
   bool _loading = false;
   bool _obscure = true;
   String? _error;
@@ -127,6 +131,7 @@ class _RegisterPageState extends State<RegisterPage> {
         await widget.auth.googleLogin(
           idToken: widget.googleIdToken!,
           rememberMe: true,
+          legalDocuments: _legalDocuments,
           registration: <String, String>{
             'name': _name.text.trim(),
             'document': doc,
@@ -143,12 +148,20 @@ class _RegisterPageState extends State<RegisterPage> {
           password: _password.text,
           rememberMe: true,
           address: address,
+          legalDocuments: _legalDocuments,
         );
       }
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted)
+        setState(() {
+          _error = e.message;
+          if (e.code == 'LEGAL_DOCUMENTS_CHANGED') {
+            _accept = false;
+            _legalDocuments = null;
+          }
+        });
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -160,7 +173,7 @@ class _RegisterPageState extends State<RegisterPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
+        title: LText(
           widget.isGoogle ? 'Completar cadastro Google' : 'Criar conta',
         ),
       ),
@@ -170,7 +183,7 @@ class _RegisterPageState extends State<RegisterPage> {
           if (widget.isGoogle)
             const Padding(
               padding: EdgeInsets.only(bottom: 14),
-              child: Text(
+              child: LText(
                 'Sua conta Google foi validada. Complete os dados necessários para entrega e faturamento.',
               ),
             ),
@@ -195,7 +208,7 @@ class _RegisterPageState extends State<RegisterPage> {
             keyboard: TextInputType.phone,
           ),
           const SizedBox(height: 10),
-          Text(
+          LText(
             'Endereço principal',
             style: Theme.of(
               context,
@@ -242,7 +255,7 @@ class _RegisterPageState extends State<RegisterPage> {
             TextField(
               controller: _password,
               obscureText: _obscure,
-              decoration: InputDecoration(
+              decoration: LDecoration(
                 labelText: 'Senha',
                 prefixIcon: const Icon(Icons.lock_outline),
                 suffixIcon: IconButton(
@@ -259,7 +272,7 @@ class _RegisterPageState extends State<RegisterPage> {
             TextField(
               controller: _password2,
               obscureText: _obscure,
-              decoration: const InputDecoration(
+              decoration: const LDecoration(
                 labelText: 'Confirmar senha',
                 prefixIcon: Icon(Icons.lock_outline),
               ),
@@ -270,16 +283,42 @@ class _RegisterPageState extends State<RegisterPage> {
             value: _accept,
             contentPadding: EdgeInsets.zero,
             controlAffinity: ListTileControlAffinity.leading,
-            title: const Text(
-              'Li e aceito os Termos de Uso e a Política de Privacidade.',
+            title: const LText(
+              'Ler e aceitar os termos de uso e a política de privacidade.',
             ),
             onChanged: _loading
                 ? null
-                : (v) => setState(() => _accept = v ?? false),
+                : (v) async {
+                    if (v != true) {
+                      setState(() => _accept = false);
+                      return;
+                    }
+                    if (!widget.bootstrap.customerCareEnabled) {
+                      setState(() => _accept = true);
+                      return;
+                    }
+                    final docs = await Navigator.of(context)
+                        .push<List<Map<String, dynamic>>>(
+                      MaterialPageRoute(
+                        builder: (_) => LegalDocumentsPage(
+                          repository: StoreRepository(
+                            widget.auth.api,
+                            auth: widget.auth,
+                          ),
+                          registration: true,
+                        ),
+                      ),
+                    );
+                    if (mounted && docs != null)
+                      setState(() {
+                        _legalDocuments = docs;
+                        _accept = true;
+                      });
+                  },
           ),
           if (_error != null) ...[
             const SizedBox(height: 8),
-            Text(
+            LText(
               _error!,
               style: TextStyle(
                 color: Theme.of(context).colorScheme.error,
@@ -299,7 +338,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 : const Icon(Icons.person_add_alt_1),
             label: Padding(
               padding: const EdgeInsets.symmetric(vertical: 13),
-              child: Text(
+              child: LText(
                 widget.isGoogle ? 'CONCLUIR CADASTRO' : 'CRIAR MINHA CONTA',
               ),
             ),
@@ -315,13 +354,14 @@ class _RegisterPageState extends State<RegisterPage> {
     IconData icon, {
     TextInputType? keyboard,
     bool enabled = true,
-  }) => Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: TextField(
-      controller: controller,
-      enabled: enabled,
-      keyboardType: keyboard,
-      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
-    ),
-  );
+  }) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: TextField(
+          controller: controller,
+          enabled: enabled,
+          keyboardType: keyboard,
+          decoration: LDecoration(labelText: label, prefixIcon: Icon(icon)),
+        ),
+      );
 }

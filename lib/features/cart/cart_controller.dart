@@ -34,17 +34,17 @@ class CartLine {
   double get subtotal => pricing.subtotal;
 
   Map<String, dynamic> toJson() => {
-    'line_id': lineId,
-    'product': product.toJson(),
-    'quantity_visual': quantityVisual,
-    'quantity_real': quantityReal,
-    'quantity_multiplier': quantityMultiplier,
-    'selected_variation_ids': selectedVariationIds,
-    'number_values': numberValues,
-    'observation': observation,
-    'observation_summary': observationSummary,
-    'selected': selected,
-  };
+        'line_id': lineId,
+        'product': product.toJson(),
+        'quantity_visual': quantityVisual,
+        'quantity_real': quantityReal,
+        'quantity_multiplier': quantityMultiplier,
+        'selected_variation_ids': selectedVariationIds,
+        'number_values': numberValues,
+        'observation': observation,
+        'observation_summary': observationSummary,
+        'selected': selected,
+      };
 
   factory CartLine.fromJson(Map<String, dynamic> json) {
     final product = StoreProduct.fromJson(mapValue(json['product']));
@@ -80,18 +80,21 @@ class CartLine {
   }
 
   Map<String, dynamic> toCheckoutJson() => {
-    'product_id': int.tryParse(product.id) ?? product.id,
-    'quantity_visual': quantityVisual,
-    'selected_variation_ids': selectedVariationIds,
-    'number_values': numberValues,
-    'observation': observation,
-  };
+        'product_id': int.tryParse(product.id) ?? product.id,
+        'quantity_visual': quantityVisual,
+        'selected_variation_ids': selectedVariationIds,
+        'number_values': numberValues,
+        'observation': observation,
+      };
 
   Map<String, dynamic> toServerJson() => {
-    'product_id': int.tryParse(product.id) ?? product.id,
-    'quantity_real': quantityReal,
-    'observation': observation,
-  };
+        'product_id': int.tryParse(product.id) ?? product.id,
+        'quantity_real': quantityReal,
+        'quantity_visual': quantityVisual,
+        'selected_variation_ids': selectedVariationIds,
+        'number_values': numberValues,
+        'observation': observation,
+      };
 }
 
 class CartController extends ChangeNotifier {
@@ -172,14 +175,12 @@ class CartController extends ChangeNotifier {
 
         // Se a linha nasceu no app, preserva variacoes/multiplicador locais.
         // O servidor continua autoritativo para produto e quantidade.
-        final key =
-            existing?.lineId ??
+        final key = existing?.lineId ??
             'server:${incoming.product.id}|${incoming.observation.trim()}';
         server[key] = CartLine(
           lineId: key,
           product: incoming.product,
-          quantityVisual:
-              existing?.quantityMultiplier != null &&
+          quantityVisual: existing?.quantityMultiplier != null &&
                   existing!.quantityMultiplier! > 0
               ? incoming.quantityReal / existing.quantityMultiplier!
               : incoming.quantityVisual,
@@ -261,21 +262,20 @@ class CartController extends ChangeNotifier {
   void setVisualQuantity(String lineId, double visual) {
     final line = _items[lineId];
     if (line == null) return;
-    final rules = line.product.quantityRules;
+    final rules = line.product.quantityRules ??
+        const QuantityRules(
+            customerType: 'B2C',
+            unit: 'UN',
+            defaultVisual: 1,
+            defaultReal: 1,
+            step: 1,
+            minimum: 1,
+            decimals: 0,
+            hasQuantityVariation: false);
     final multiplier = line.quantityMultiplier;
-    double normalized = visual;
-    if (multiplier != null && multiplier > 0) {
-      normalized = normalized.floorToDouble();
-      if (normalized < 1) normalized = 1;
-      line.quantityReal = normalized * multiplier;
-    } else if (rules?.isB2b == true) {
-      if (normalized < 0.001) normalized = 0.001;
-      line.quantityReal = normalized;
-    } else {
-      normalized = normalized.floorToDouble();
-      if (normalized < 1) normalized = 1;
-      line.quantityReal = normalized;
-    }
+    final normalized = rules.normalize(visual,
+        hasMultiplier: multiplier != null && multiplier > 0);
+    line.quantityReal = normalized * (multiplier ?? 1);
     line.quantityVisual = normalized;
     notifyListeners();
     _persist();

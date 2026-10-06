@@ -1,3 +1,4 @@
+import '../../core/localization/localized_widgets.dart';
 import '../../core/config/platform_info.dart';
 import 'dart:convert';
 
@@ -169,7 +170,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
+            content: LText(
               e.isUnauthorized
                   ? 'Entre na sua conta para continuar.'
                   : e.message,
@@ -339,8 +340,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         merchant['merchantId'] = GeneratedAppConfig.googlePayMerchantId.trim();
       }
       if (GeneratedAppConfig.googlePayMerchantName.trim().isNotEmpty) {
-        merchant['merchantName'] = GeneratedAppConfig.googlePayMerchantName
-            .trim();
+        merchant['merchantName'] =
+            GeneratedAppConfig.googlePayMerchantName.trim();
       }
       if (merchant.isNotEmpty) data['merchantInfo'] = merchant;
       config['data'] = data;
@@ -380,14 +381,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
         code: 'GOOGLE_PAY_UNAVAILABLE',
       );
     }
-    final result = await client
-        .showPaymentSelector(PayProvider.google_pay, <PaymentItem>[
-          PaymentItem(
-            label: 'Total',
-            amount: total.toStringAsFixed(2),
-            status: PaymentItemStatus.final_price,
-          ),
-        ]);
+    final result =
+        await client.showPaymentSelector(PayProvider.google_pay, <PaymentItem>[
+      PaymentItem(
+        label: 'Total',
+        amount: total.toStringAsFixed(2),
+        status: PaymentItemStatus.final_price,
+      ),
+    ]);
     return jsonEncode(result);
   }
 
@@ -406,7 +407,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (changeFor == null || changeFor <= 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Informe para quanto precisa de troco.'),
+            content: LText('Informe para quanto precisa de troco.'),
           ),
         );
         return;
@@ -415,7 +416,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (changeFor + 0.0001 < total) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
+            content: LText(
               'O valor para troco não pode ser menor que ${_money(total)}.',
             ),
           ),
@@ -480,11 +481,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (mounted)
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: LText(e.message)));
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Não foi possível concluir o pedido: $e')),
+          SnackBar(content: LText('Não foi possível concluir o pedido: $e')),
         );
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -493,17 +494,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   Future<void> _pickDate() async {
     final schedule = mapValue(_data['schedule']);
-    final firstDate =
-        DateTime.tryParse(stringValue(schedule['first_date'])) ??
+    final firstDate = DateTime.tryParse(stringValue(schedule['first_date'])) ??
         DateTime.now();
     final allowed = listValue(schedule['allowed_weekdays'])
         .map((e) => int.tryParse(e.toString()))
         .whereType<int>()
         .where((e) => e >= 1 && e <= 7)
         .toSet();
-    DateTime initial = _date != null && !_date!.isBefore(firstDate)
-        ? _date!
-        : firstDate;
+    DateTime initial =
+        _date != null && !_date!.isBefore(firstDate) ? _date! : firstDate;
     if (allowed.isNotEmpty && !allowed.contains(initial.weekday)) {
       for (var i = 0; i < 14; i++) {
         final candidate = firstDate.add(Duration(days: i));
@@ -515,7 +514,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
     final picked = await showDatePicker(
       context: context,
-      locale: const Locale('pt', 'BR'),
+      locale: Localizations.localeOf(context),
       initialDate: initial,
       firstDate: firstDate,
       lastDate: firstDate.add(const Duration(days: 120)),
@@ -543,14 +542,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              LText(
                 'Onde deseja receber?',
                 style: Theme.of(
                   context,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 5),
-              const Text(
+              const LText(
                 'Os endereços fora da área atendida ficam desativados.',
               ),
               const SizedBox(height: 14),
@@ -586,8 +585,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             color: isSelected && eligible
                                 ? Theme.of(context).colorScheme.primary
                                 : eligible
-                                ? const Color(0xFF86EFAC)
-                                : const Color(0xFFD1D5DB),
+                                    ? const Color(0xFF86EFAC)
+                                    : const Color(0xFFD1D5DB),
                             width: isSelected ? 2 : 1,
                           ),
                         ),
@@ -608,7 +607,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                   Row(
                                     children: [
                                       Expanded(
-                                        child: Text(
+                                        child: LText(
                                           stringValue(
                                             a['label'],
                                             fallback: 'Endereço',
@@ -619,7 +618,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                         ),
                                       ),
                                       if (eligible)
-                                        const Text(
+                                        const LText(
                                           'Disponível',
                                           style: TextStyle(
                                             color: Color(0xFF15803D),
@@ -628,7 +627,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                           ),
                                         )
                                       else
-                                        Text(
+                                        LText(
                                           'Indisponível',
                                           style: TextStyle(
                                             color: Theme.of(
@@ -641,10 +640,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                     ],
                                   ),
                                   const SizedBox(height: 4),
-                                  Text(_addressLine(a)),
+                                  LText(_addressLine(a)),
                                   if (distance >= 0) ...[
                                     const SizedBox(height: 4),
-                                    Text(
+                                    LText(
                                       '${distance.toStringAsFixed(2).replaceAll('.', ',')} km',
                                       style: const TextStyle(
                                         fontSize: 12,
@@ -655,7 +654,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                   if (message != null &&
                                       message.isNotEmpty) ...[
                                     const SizedBox(height: 4),
-                                    Text(
+                                    LText(
                                       message,
                                       style: TextStyle(
                                         fontSize: 12,
@@ -693,13 +692,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
     if (_completed != null) return _buildCompleted(context, _completed!);
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Finalizar compra')),
+        appBar: AppBar(title: const LText('Finalizar compra')),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
     if (_error != null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Finalizar compra')),
+        appBar: AppBar(title: const LText('Finalizar compra')),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -708,12 +707,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
               children: [
                 const Icon(Icons.error_outline, size: 56),
                 const SizedBox(height: 12),
-                Text(_error!, textAlign: TextAlign.center),
+                LText(_error!, textAlign: TextAlign.center),
                 const SizedBox(height: 14),
                 FilledButton.icon(
                   onPressed: () => _prepare(),
                   icon: const Icon(Icons.refresh),
-                  label: const Text('Tentar novamente'),
+                  label: const LText('Tentar novamente'),
                 ),
               ],
             ),
@@ -746,7 +745,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     currentAddress ??= addresses.isNotEmpty ? addresses.first : null;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Finalizar compra')),
+      appBar: AppBar(title: const LText('Finalizar compra')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 130),
         children: [
@@ -758,13 +757,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 const ButtonSegment(
                   value: 'ENTREGA',
                   icon: Icon(Icons.delivery_dining),
-                  label: Text('Entrega'),
+                  label: LText('Entrega'),
                 ),
                 if (boolValue(receipt['pickup_available']))
                   const ButtonSegment(
                     value: 'RETIRADA',
                     icon: Icon(Icons.storefront),
-                    label: Text('Retirada'),
+                    label: LText('Retirada'),
                   ),
               ],
               selected: <String>{_receiptType},
@@ -780,7 +779,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               title: 'Endereço de entrega',
               icon: Icons.location_on_outlined,
               child: addresses.isEmpty
-                  ? const Text(
+                  ? const LText(
                       'Nenhum endereço cadastrado. Cadastre um endereço na sua conta.',
                     )
                   : InkWell(
@@ -817,7 +816,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
+                                  LText(
                                     currentAddress == null
                                         ? 'Escolha um endereço'
                                         : stringValue(
@@ -829,7 +828,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                     ),
                                   ),
                                   if (currentAddress != null)
-                                    Text(
+                                    LText(
                                       _addressLine(currentAddress),
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
@@ -837,7 +836,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                   if (nullableString(freight['message']) !=
                                       null) ...[
                                     const SizedBox(height: 3),
-                                    Text(
+                                    LText(
                                       stringValue(freight['message']),
                                       style: TextStyle(
                                         fontSize: 12,
@@ -885,7 +884,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
+                          LText(
                             _date == null
                                 ? 'Escolher data'
                                 : '${_weekdayPt(_date!)} · ${_dateBr(_date!)}',
@@ -895,7 +894,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             ),
                           ),
                           const SizedBox(height: 2),
-                          Text(
+                          LText(
                             'Toque para abrir o calendário',
                             style: TextStyle(
                               fontSize: 12,
@@ -928,7 +927,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           controller: _couponController,
                           textCapitalization: TextCapitalization.characters,
                           enabled: _couponCode == null,
-                          decoration: const InputDecoration(
+                          decoration: const LDecoration(
                             hintText: 'Digite o código',
                           ),
                           onSubmitted: _couponCode == null
@@ -942,12 +941,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           onPressed: _couponLoading
                               ? null
                               : () => _applyCoupon(_couponController.text),
-                          child: const Text('Aplicar'),
+                          child: const LText('Aplicar'),
                         )
                       else
                         OutlinedButton(
                           onPressed: _couponLoading ? null : _removeCoupon,
-                          child: const Text('Remover'),
+                          child: const LText('Remover'),
                         ),
                     ],
                   ),
@@ -957,7 +956,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   ],
                   if (_couponMessage != null) ...[
                     const SizedBox(height: 8),
-                    Text(
+                    LText(
                       _couponMessage!,
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
@@ -970,7 +969,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   if (coupon.isNotEmpty &&
                       numberValue(coupon['saving']) > 0) ...[
                     const SizedBox(height: 4),
-                    Text(
+                    LText(
                       'Economia: ${_money(numberValue(coupon['saving']))}',
                       style: const TextStyle(
                         color: Color(0xFF15803D),
@@ -995,8 +994,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 _SummaryRow(
                   'Frete',
                   numberValue(summary['freight']),
-                  suffix:
-                      _receiptType == 'RETIRADA' ||
+                  suffix: _receiptType == 'RETIRADA' ||
                           numberValue(summary['freight']) <= 0
                       ? 'Grátis'
                       : null,
@@ -1019,7 +1017,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 ],
                 if (!freightOk && _receiptType == 'ENTREGA') ...[
                   const SizedBox(height: 10),
-                  Text(
+                  LText(
                     stringValue(
                       freight['message'],
                       fallback: 'Endereço fora da área de entrega.',
@@ -1032,7 +1030,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 ],
                 if (!minimumReached) ...[
                   const SizedBox(height: 10),
-                  Text(
+                  LText(
                     'Faltam ${_money(numberValue(quote['minimum_missing']))} para o pedido mínimo.',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.error,
@@ -1048,22 +1046,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
             title: 'Pagamento',
             icon: Icons.payments_outlined,
             child: payments.isEmpty
-                ? const Text(
+                ? const LText(
                     'Nenhum meio de pagamento disponível para este pedido.',
                   )
                 : Column(
                     children: [
                       ...payments.map((payment) {
                         final id = stringValue(payment['id']);
-                        final enabled =
-                            _paymentLocallyEnabled(payment) &&
+                        final enabled = _paymentLocallyEnabled(payment) &&
                             boolValue(
                               payment['mobile_enabled'],
                               fallback: true,
                             );
                         final hub = nullableString(payment['hub']);
-                        final reason =
-                            id == 'GOOGLE_PAY' &&
+                        final reason = id == 'GOOGLE_PAY' &&
                                 (PlatformInfo.isIOS ||
                                     !GeneratedAppConfig.googlePayEnabled)
                             ? 'Google Pay não foi habilitado nesta compilação.'
@@ -1072,24 +1068,24 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           value: id,
                           groupValue: _paymentId,
                           contentPadding: EdgeInsets.zero,
-                          title: Text(
+                          title: LText(
                             stringValue(payment['name'], fallback: id),
                           ),
                           subtitle: reason != null && !enabled
-                              ? Text(reason)
+                              ? LText(reason)
                               : hub == null
-                              ? null
-                              : Text('Online · $hub'),
+                                  ? null
+                                  : LText('Online · $hub'),
                           secondary: Icon(_paymentIcon(id)),
                           onChanged: enabled
                               ? (value) => setState(() {
-                                  _paymentId = value;
-                                  _paymentTerm = null;
-                                  if (!_isCashPayment(payments, value)) {
-                                    _needsChange = false;
-                                    _changeForController.clear();
-                                  }
-                                })
+                                    _paymentId = value;
+                                    _paymentTerm = null;
+                                    if (!_isCashPayment(payments, value)) {
+                                      _needsChange = false;
+                                      _changeForController.clear();
+                                    }
+                                  })
                               : null,
                         );
                       }),
@@ -1111,22 +1107,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           paymentTerms.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         DropdownButtonFormField<String>(
-                          value:
-                              _paymentTerm != null &&
+                          value: _paymentTerm != null &&
                                   paymentTerms.any(
                                     (e) =>
                                         stringValue(e['code']) == _paymentTerm,
                                   )
                               ? _paymentTerm
                               : null,
-                          decoration: const InputDecoration(
+                          decoration: const LDecoration(
                             labelText: 'Condição / prazo',
                           ),
                           items: paymentTerms
                               .map(
                                 (term) => DropdownMenuItem<String>(
                                   value: stringValue(term['code']),
-                                  child: Text(
+                                  child: LText(
                                     '${stringValue(term['code'])} · ${stringValue(term['name'])}',
                                   ),
                                 ),
@@ -1159,11 +1154,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                               SwitchListTile.adaptive(
                                 value: _needsChange,
                                 contentPadding: EdgeInsets.zero,
-                                title: const Text(
+                                title: const LText(
                                   'Precisa de troco?',
                                   style: TextStyle(fontWeight: FontWeight.w800),
                                 ),
-                                subtitle: const Text(
+                                subtitle: const LText(
                                   'Informe o valor que será entregue ao motorista.',
                                 ),
                                 onChanged: (value) => setState(() {
@@ -1177,14 +1172,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                   controller: _changeForController,
                                   keyboardType:
                                       const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                      ),
+                                    decimal: true,
+                                  ),
                                   inputFormatters: [
                                     FilteringTextInputFormatter.allow(
                                       RegExp(r'[0-9.,]'),
                                     ),
                                   ],
-                                  decoration: const InputDecoration(
+                                  decoration: const LDecoration(
                                     labelText: 'Troco para quanto?',
                                     hintText: 'Ex.: 100,00',
                                     prefixText: 'R\$ ',
@@ -1208,7 +1203,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               maxLines: 4,
               maxLength: 500,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
+              decoration: const LDecoration(
                 hintText:
                     'Ex.: chamar no interfone, entregar na portaria, não substituir itens...',
               ),
@@ -1219,8 +1214,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.all(14),
         child: FilledButton.icon(
-          onPressed:
-              boolValue(capabilities['order_submit']) &&
+          onPressed: boolValue(capabilities['order_submit']) &&
                   freightOk &&
                   minimumReached &&
                   _paymentId != null &&
@@ -1234,11 +1228,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.lock_outline),
-          label: Text(
+          label: LText(
             boolValue(capabilities['order_submit'])
                 ? (_submitting
-                      ? 'Confirmando pedido...'
-                      : 'Confirmar pedido · ${_money(numberValue(summary['total']))}')
+                    ? 'Confirmando pedido...'
+                    : 'Confirmar pedido · ${_money(numberValue(summary['total']))}')
                 : 'Confirmação do pedido indisponível',
           ),
         ),
@@ -1258,13 +1252,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final boleto = stringValue(payment['boleto_barcode']);
     final boletoUrl = stringValue(payment['boleto_url']);
     return Scaffold(
-      appBar: AppBar(title: const Text('Pedido realizado')),
+      appBar: AppBar(title: const LText('Pedido realizado')),
       body: ListView(
         padding: const EdgeInsets.all(18),
         children: [
           const Icon(Icons.check_circle, size: 72, color: Color(0xFF15803D)),
           const SizedBox(height: 12),
-          Text(
+          LText(
             'Pedido #$number recebido!',
             textAlign: TextAlign.center,
             style: Theme.of(
@@ -1272,7 +1266,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 6),
-          Text(
+          LText(
             'Total ${_money(numberValue(order['total']))}',
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
@@ -1283,7 +1277,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               color: Theme.of(context).colorScheme.errorContainer,
               child: Padding(
                 padding: const EdgeInsets.all(14),
-                child: Text(
+                child: LText(
                   'O pedido foi criado, mas o pagamento precisa de atenção: $paymentError',
                 ),
               ),
@@ -1297,7 +1291,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
+                    const LText(
                       'PIX copia e cola',
                       style: TextStyle(
                         fontWeight: FontWeight.w900,
@@ -1311,11 +1305,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: pix));
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Código PIX copiado.')),
+                          const SnackBar(content: LText('Código PIX copiado.')),
                         );
                       },
                       icon: const Icon(Icons.copy),
-                      label: const Text('Copiar PIX'),
+                      label: const LText('Copiar PIX'),
                     ),
                   ],
                 ),
@@ -1330,7 +1324,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
+                    const LText(
                       'Boleto',
                       style: TextStyle(
                         fontWeight: FontWeight.w900,
@@ -1346,12 +1340,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           Clipboard.setData(ClipboardData(text: boleto));
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Código do boleto copiado.'),
+                              content: LText('Código do boleto copiado.'),
                             ),
                           );
                         },
                         icon: const Icon(Icons.copy),
-                        label: const Text('Copiar código'),
+                        label: const LText('Copiar código'),
                       ),
                     ],
                     if (boletoUrl.isNotEmpty) ...[
@@ -1369,11 +1363,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
             icon: const Icon(Icons.shopping_bag_outlined),
             label: const Padding(
               padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('Continuar na loja'),
+              child: LText('Continuar na loja'),
             ),
           ),
           const SizedBox(height: 6),
-          Text(
+          LText(
             'Você pode acompanhar este pedido em Conta > Meus pedidos.',
             textAlign: TextAlign.center,
             style: TextStyle(
@@ -1435,14 +1429,14 @@ class _CardPaymentForm extends StatelessWidget {
               FilteringTextInputFormatter.digitsOnly,
               LengthLimitingTextInputFormatter(19),
             ],
-            decoration: const InputDecoration(labelText: 'Número do cartão'),
+            decoration: const LDecoration(labelText: 'Número do cartão'),
           ),
           const SizedBox(height: 8),
           TextField(
             controller: holderController,
             textCapitalization: TextCapitalization.characters,
             autofillHints: const [AutofillHints.creditCardName],
-            decoration: const InputDecoration(
+            decoration: const LDecoration(
               labelText: 'Nome impresso no cartão',
             ),
           ),
@@ -1458,9 +1452,9 @@ class _CardPaymentForm extends StatelessWidget {
                     FilteringTextInputFormatter.digitsOnly,
                     LengthLimitingTextInputFormatter(4),
                   ],
-                  decoration: const InputDecoration(
+                  decoration: const LDecoration(
                     labelText: 'Validade',
-                    hintText: 'MMAA',
+                    hintText: 'MM/AA',
                   ),
                 ),
               ),
@@ -1475,7 +1469,7 @@ class _CardPaymentForm extends StatelessWidget {
                     FilteringTextInputFormatter.digitsOnly,
                     LengthLimitingTextInputFormatter(4),
                   ],
-                  decoration: const InputDecoration(labelText: 'CVV'),
+                  decoration: const LDecoration(labelText: 'CVV'),
                 ),
               ),
             ],
@@ -1484,7 +1478,7 @@ class _CardPaymentForm extends StatelessWidget {
           if (options.isNotEmpty)
             DropdownButtonFormField<int>(
               value: effective,
-              decoration: const InputDecoration(labelText: 'Parcelas'),
+              decoration: const LDecoration(labelText: 'Parcelas'),
               items: options.map((item) {
                 final count = int.tryParse(stringValue(item['count'])) ?? 1;
                 final value = numberValue(item['value']);
@@ -1492,7 +1486,7 @@ class _CardPaymentForm extends StatelessWidget {
                 final noInterest = boolValue(item['no_interest']);
                 final label =
                     '$count x ${_money(value)}${noInterest ? ' sem juros' : ' · total ${_money(total)}'}';
-                return DropdownMenuItem<int>(value: count, child: Text(label));
+                return DropdownMenuItem<int>(value: count, child: LText(label));
               }).toList(),
               onChanged: (value) {
                 if (value != null) onInstallmentsChanged(value);
@@ -1501,12 +1495,12 @@ class _CardPaymentForm extends StatelessWidget {
           else
             const Align(
               alignment: Alignment.centerLeft,
-              child: Text('1x no cartão'),
+              child: LText('1x no cartão'),
             ),
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerLeft,
-            child: Text(
+            child: LText(
               'Os dados do cartão são tokenizados diretamente no Pagar.me; o número e o CVV não são enviados ao ecommerce.',
               style: TextStyle(
                 fontSize: 12,
@@ -1531,33 +1525,33 @@ class _CheckoutCard extends StatelessWidget {
   final Widget child;
   @override
   Widget build(BuildContext context) => Card(
-    margin: EdgeInsets.zero,
-    child: Padding(
-      padding: const EdgeInsets.all(15),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(15),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, color: Theme.of(context).colorScheme.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
+              Row(
+                children: [
+                  Icon(icon, color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: LText(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
+              const SizedBox(height: 12),
+              child,
             ],
           ),
-          const SizedBox(height: 12),
-          child,
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }
 
 class _SummaryRow extends StatelessWidget {
@@ -1575,24 +1569,26 @@ class _SummaryRow extends StatelessWidget {
   final bool prefixMinus;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 4),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: strong ? const TextStyle(fontWeight: FontWeight.w900) : null,
-          ),
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Expanded(
+              child: LText(
+                label,
+                style: strong
+                    ? const TextStyle(fontWeight: FontWeight.w900)
+                    : null,
+              ),
+            ),
+            LText(
+              suffix ?? '${prefixMinus ? '- ' : ''}${_money(value.abs())}',
+              style: strong
+                  ? const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)
+                  : const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ],
         ),
-        Text(
-          suffix ?? '${prefixMinus ? '- ' : ''}${_money(value.abs())}',
-          style: strong
-              ? const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)
-              : const TextStyle(fontWeight: FontWeight.w700),
-        ),
-      ],
-    ),
-  );
+      );
 }
 
 String _addressLine(Map<String, dynamic> a) {

@@ -44,10 +44,10 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> bootstrap() => get(
-    '/bootstrap.php',
-    authenticated: false,
-    timeout: const Duration(seconds: 45),
-  );
+        '/bootstrap.php',
+        authenticated: false,
+        timeout: const Duration(seconds: 45),
+      );
 
   Future<Map<String, dynamic>> health() =>
       get('/health.php', authenticated: false);
@@ -137,18 +137,18 @@ class ApiClient {
   }
 
   Map<String, String> _headers({String? token}) => <String, String>{
-    'Accept': 'application/json',
-    'Content-Type': 'application/json',
-    'X-Soft-Platform': AppEnvironment.platform,
-    'X-Soft-App-Version': device.appVersion,
-    'X-Soft-App-Build': device.appBuild,
-    'X-Soft-Device-Id': device.deviceId,
-    if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-    // Fallback proprio da API Mobile. Alguns Apache/XAMPP/CGI removem
-    // Authorization antes de chegar ao PHP; o servidor aceita este
-    // header somente para o token da sessao Mobile.
-    if (token != null && token.isNotEmpty) 'X-Soft-Access-Token': token,
-  };
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-Soft-Platform': AppEnvironment.platform,
+        'X-Soft-App-Version': device.appVersion,
+        'X-Soft-App-Build': device.appBuild,
+        'X-Soft-Device-Id': device.deviceId,
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        // Fallback proprio da API Mobile. Alguns Apache/XAMPP/CGI removem
+        // Authorization antes de chegar ao PHP; o servidor aceita este
+        // header somente para o token da sessao Mobile.
+        if (token != null && token.isNotEmpty) 'X-Soft-Access-Token': token,
+      };
 
   Map<String, dynamic> _decode(http.Response response) {
     Map<String, dynamic>? payload;
@@ -162,8 +162,7 @@ class ApiClient {
     }
 
     final result = payload ?? <String, dynamic>{};
-    final failed =
-        response.statusCode < 200 ||
+    final failed = response.statusCode < 200 ||
         response.statusCode >= 300 ||
         result['ok'] == false;
 

@@ -1,37 +1,26 @@
 workflows:
   ios-production:
-    name: Soft Ecommerce iOS 1.6.28 produção
+    name: Soft Ecommerce iOS 1.6.32 produção
     instance_type: mac_mini_m2
     max_build_duration: 60
-
     environment:
       flutter: 3.35.5
       xcode: latest
       cocoapods: default
-
       ios_signing:
         distribution_type: app_store
         bundle_identifier: br.com.softsistemas.domlevi
-
       vars:
-        SOFT_BUILD_NUMBER: "186"
+        SOFT_API_BASE_URL: "https://domlevi.com.br/api/mobile/v1"
         CI: "true"
         FLUTTER_SUPPRESS_ANALYTICS: "true"
-
     scripts:
       - name: Preparar API, branding e projeto iOS
-        script: bash tooling/prepare_ios.sh
-
+        script: bash tooling/prepare_ios.sh "$SOFT_API_BASE_URL"
       - name: Aplicar certificados configurados na equipe Codemagic
         script: xcode-project use-profiles
-
       - name: Compilar IPA de produção
-        script: |
-          flutter build ipa --release \
-            --build-name=1.6.28 \
-            --build-number="$SOFT_BUILD_NUMBER" \
-            --export-options-plist=/Users/builder/export_options.plist
-
+        script: flutter build ipa --release --dart-define="SOFT_API_BASE_URL=$SOFT_API_BASE_URL" --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
       - build/ios/archive/*.xcarchive

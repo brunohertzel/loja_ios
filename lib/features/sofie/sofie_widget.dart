@@ -1,3 +1,5 @@
+import '../../core/localization/localized_widgets.dart';
+import '../../core/localization/locale_controller.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -23,12 +25,10 @@ class SofieFloatingButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!config.enabled) return const SizedBox.shrink();
-    final color =
-        AppTheme.parseColor(config.primaryColor) ??
+    final color = AppTheme.parseColor(config.primaryColor) ??
         Theme.of(context).colorScheme.primary;
-    final foreground = color.computeLuminance() > .48
-        ? Colors.black
-        : Colors.white;
+    final foreground =
+        color.computeLuminance() > .48 ? Colors.black : Colors.white;
 
     return SizedBox(
       width: 62,
@@ -39,7 +39,7 @@ class SofieFloatingButton extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         backgroundColor: color,
         foregroundColor: foreground,
-        tooltip: 'Falar com ${config.name}',
+        tooltip: tr('Falar com ${config.name}'),
         onPressed: () => showModalBottomSheet<void>(
           context: context,
           isScrollControlled: true,
@@ -285,9 +285,8 @@ class _SofieChatPanelState extends State<SofieChatPanel> {
     final scheme = Theme.of(context).colorScheme;
     final brand =
         AppTheme.parseColor(widget.config.primaryColor) ?? scheme.primary;
-    final brandText = brand.computeLuminance() > .48
-        ? Colors.black
-        : Colors.white;
+    final brandText =
+        brand.computeLuminance() > .48 ? Colors.black : Colors.white;
     final media = MediaQuery.of(context);
     final height = media.size.height * .78;
     final keyboard = media.viewInsets.bottom;
@@ -328,7 +327,7 @@ class _SofieChatPanelState extends State<SofieChatPanel> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
+                          LText(
                             widget.config.name,
                             style: TextStyle(
                               color: brandText,
@@ -336,12 +335,8 @@ class _SofieChatPanelState extends State<SofieChatPanel> {
                               fontSize: 16,
                             ),
                           ),
-                          Text(
-                            '${widget.config.role} · ${_status == 'FILA'
-                                ? 'aguardando atendente'
-                                : _status == 'HUMANO'
-                                ? 'atendimento humano'
-                                : 'online'}',
+                          LText(
+                            '${widget.config.role} · ${_status == 'FILA' ? 'aguardando atendente' : _status == 'HUMANO' ? 'atendimento humano' : 'online'}',
                             style: TextStyle(
                               color: brandText.withOpacity(.82),
                               fontSize: 11,
@@ -368,7 +363,7 @@ class _SofieChatPanelState extends State<SofieChatPanel> {
                     color: scheme.errorContainer,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text(
+                  child: LText(
                     _error!,
                     style: TextStyle(
                       color: scheme.onErrorContainer,
@@ -425,7 +420,7 @@ class _SofieChatPanelState extends State<SofieChatPanel> {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
+                                  LText(
                                     product.name,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
@@ -435,7 +430,7 @@ class _SofieChatPanelState extends State<SofieChatPanel> {
                                     ),
                                   ),
                                   if (product.priceText != null)
-                                    Text(
+                                    LText(
                                       product.priceText!,
                                       style: TextStyle(
                                         color: scheme.primary,
@@ -461,11 +456,10 @@ class _SofieChatPanelState extends State<SofieChatPanel> {
                           (action) => SizedBox(
                             width: double.infinity,
                             child: FilledButton.icon(
-                              onPressed: _sending
-                                  ? null
-                                  : () => _confirm(action),
+                              onPressed:
+                                  _sending ? null : () => _confirm(action),
                               icon: const Icon(Icons.shopping_cart_checkout),
-                              label: Text(
+                              label: LText(
                                 action.valueText.isEmpty
                                     ? 'Confirmar ação da ${widget.config.name}'
                                     : 'Confirmar · ${action.valueText}',
@@ -510,7 +504,7 @@ class _SofieChatPanelState extends State<SofieChatPanel> {
                         maxLines: 4,
                         maxLength: 2500,
                         textInputAction: TextInputAction.newline,
-                        decoration: InputDecoration(
+                        decoration: LDecoration(
                           counterText: '',
                           hintText: 'Fale com a ${widget.config.name}...',
                         ),
@@ -545,9 +539,9 @@ class _Quick extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(right: 7),
-    child: ActionChip(label: Text(text), onPressed: onTap),
-  );
+        padding: const EdgeInsets.only(right: 7),
+        child: ActionChip(label: LText(text), onPressed: onTap),
+      );
 }
 
 class _MessageBubble extends StatelessWidget {
@@ -573,7 +567,7 @@ class _MessageBubble extends StatelessWidget {
           color: background,
           borderRadius: BorderRadius.circular(14),
         ),
-        child: Text(
+        child: LText(
           message.text,
           style: TextStyle(color: foreground, height: 1.3),
         ),
@@ -632,14 +626,14 @@ class _SofieAvatar extends StatelessWidget {
   }
 
   Widget _fallback() => SizedBox(
-    width: size,
-    height: size,
-    child: Center(
-      child: Icon(
-        Icons.auto_awesome_rounded,
-        color: foreground,
-        size: size * .52,
-      ),
-    ),
-  );
+        width: size,
+        height: size,
+        child: Center(
+          child: Icon(
+            Icons.auto_awesome_rounded,
+            color: foreground,
+            size: size * .52,
+          ),
+        ),
+      );
 }

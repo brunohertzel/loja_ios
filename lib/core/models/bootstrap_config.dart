@@ -10,6 +10,7 @@ class AppBootstrap {
     required this.payments,
     required this.sofie,
     required this.features,
+    this.customerCareEnabled = false,
   });
 
   final String moduleVersion;
@@ -22,6 +23,7 @@ class AppBootstrap {
   final PaymentConfig payments;
   final SofieConfig sofie;
   final FeatureConfig features;
+  final bool customerCareEnabled;
 
   factory AppBootstrap.fromJson(Map<String, dynamic> json) {
     final license = _asMap(json['license']);
@@ -36,6 +38,7 @@ class AppBootstrap {
       payments: PaymentConfig.fromJson(_asMap(json['payments'])),
       sofie: SofieConfig.fromJson(_asMap(json['sofie'])),
       features: FeatureConfig.fromJson(_asMap(json['features'])),
+      customerCareEnabled: _asBool(_asMap(json['customer_care'])['enabled']),
     );
   }
 }
@@ -72,23 +75,23 @@ class AppBranding {
   final String themeDefault;
 
   factory AppBranding.fromJson(Map<String, dynamic> json) => AppBranding(
-    name: _asString(json['name'], fallback: 'Soft Ecommerce'),
-    logoUrl: _nullableString(json['logo_url']),
-    iconAndroidUrl: _nullableString(json['icon_android_url']),
-    iconIosUrl: _nullableString(json['icon_ios_url']),
-    splashUrl: _nullableString(json['splash_url']),
-    primaryColor: _asString(json['primary_color'], fallback: '#1A73E8'),
-    secondaryColor: _asString(json['secondary_color'], fallback: '#202124'),
-    minVersion: _nullableString(json['min_version']),
-    currentVersion: _nullableString(json['current_version']),
-    currentBuild: _nullableString(json['current_build']),
-    forceUpdate: _asBool(json['force_update']),
-    storeUrl: _nullableString(json['store_url']),
-    themeDefault: _asString(
-      json['theme_default'],
-      fallback: 'SYSTEM',
-    ).toUpperCase(),
-  );
+        name: _asString(json['name'], fallback: 'Soft Ecommerce'),
+        logoUrl: _nullableString(json['logo_url']),
+        iconAndroidUrl: _nullableString(json['icon_android_url']),
+        iconIosUrl: _nullableString(json['icon_ios_url']),
+        splashUrl: _nullableString(json['splash_url']),
+        primaryColor: _asString(json['primary_color'], fallback: '#1A73E8'),
+        secondaryColor: _asString(json['secondary_color'], fallback: '#202124'),
+        minVersion: _nullableString(json['min_version']),
+        currentVersion: _nullableString(json['current_version']),
+        currentBuild: _nullableString(json['current_build']),
+        forceUpdate: _asBool(json['force_update']),
+        storeUrl: _nullableString(json['store_url']),
+        themeDefault: _asString(
+          json['theme_default'],
+          fallback: 'SYSTEM',
+        ).toUpperCase(),
+      );
 }
 
 class SecurityConfig {
@@ -111,14 +114,14 @@ class SecurityConfig {
   final String? passwordRecoveryUrl;
 
   factory SecurityConfig.fromJson(Map<String, dynamic> json) => SecurityConfig(
-    rememberMe: _asBool(json['remember_me']),
-    biometrics: _asBool(json['biometrics']),
-    rememberDays: _asInt(json['remember_days'], fallback: 90),
-    registrationEnabled: _asBool(json['registration_enabled']),
-    googleLoginEnabled: _asBool(json['google_login_enabled']),
-    googleWebClientId: _nullableString(json['google_web_client_id']),
-    passwordRecoveryUrl: _nullableString(json['password_recovery_url']),
-  );
+        rememberMe: _asBool(json['remember_me']),
+        biometrics: _asBool(json['biometrics']),
+        rememberDays: _asInt(json['remember_days'], fallback: 90),
+        registrationEnabled: _asBool(json['registration_enabled']),
+        googleLoginEnabled: _asBool(json['google_login_enabled']),
+        googleWebClientId: _nullableString(json['google_web_client_id']),
+        passwordRecoveryUrl: _nullableString(json['password_recovery_url']),
+      );
 }
 
 class PaymentConfig {
@@ -145,19 +148,20 @@ class PaymentConfig {
   final String? googlePayMerchantName;
 
   factory PaymentConfig.fromJson(Map<String, dynamic> json) => PaymentConfig(
-    hubActive: _asBool(json['hub_active']),
-    hub: _nullableString(json['hub']),
-    googlePay: _asBool(json['google_pay']),
-    applePay: _asBool(json['apple_pay']),
-    payOnDelivery: _asBool(json['pay_on_delivery']),
-    payOnPickup: _asBool(json['pay_on_pickup']),
-    googlePayEnvironment: _asString(
-      json['google_pay_environment'],
-      fallback: 'TEST',
-    ).toUpperCase(),
-    googlePayMerchantId: _nullableString(json['google_pay_merchant_id']),
-    googlePayMerchantName: _nullableString(json['google_pay_merchant_name']),
-  );
+        hubActive: _asBool(json['hub_active']),
+        hub: _nullableString(json['hub']),
+        googlePay: _asBool(json['google_pay']),
+        applePay: _asBool(json['apple_pay']),
+        payOnDelivery: _asBool(json['pay_on_delivery']),
+        payOnPickup: _asBool(json['pay_on_pickup']),
+        googlePayEnvironment: _asString(
+          json['google_pay_environment'],
+          fallback: 'TEST',
+        ).toUpperCase(),
+        googlePayMerchantId: _nullableString(json['google_pay_merchant_id']),
+        googlePayMerchantName:
+            _nullableString(json['google_pay_merchant_name']),
+      );
 }
 
 class SofieConfig {
@@ -192,22 +196,22 @@ class SofieConfig {
   bool get onLeft => position.toUpperCase() == 'LEFT';
 
   factory SofieConfig.fromJson(Map<String, dynamic> json) => SofieConfig(
-    enabled: _asBool(json['enabled']),
-    globalEnabled: _asBool(json['global_enabled']),
-    mobileMode: _asString(
-      json['mobile_mode'],
-      fallback: 'INHERIT',
-    ).toUpperCase(),
-    name: _asString(json['name'], fallback: 'SOFIE'),
-    role: _asString(json['role'], fallback: 'Assistente virtual'),
-    avatarUrl: _nullableString(json['avatar_url']),
-    iconUrl: _nullableString(json['icon_url'] ?? json['avatar_url']),
-    welcomeMessage: _nullableString(json['welcome_message']),
-    primaryColor: _asString(json['primary_color'], fallback: '#7C3AED'),
-    secondaryColor: _asString(json['secondary_color'], fallback: '#5B21B6'),
-    position: _asString(json['position'], fallback: 'RIGHT').toUpperCase(),
-    humanSupport: _asBool(json['human_support']),
-  );
+        enabled: _asBool(json['enabled']),
+        globalEnabled: _asBool(json['global_enabled']),
+        mobileMode: _asString(
+          json['mobile_mode'],
+          fallback: 'INHERIT',
+        ).toUpperCase(),
+        name: _asString(json['name'], fallback: 'SOFIE'),
+        role: _asString(json['role'], fallback: 'Assistente virtual'),
+        avatarUrl: _nullableString(json['avatar_url']),
+        iconUrl: _nullableString(json['icon_url'] ?? json['avatar_url']),
+        welcomeMessage: _nullableString(json['welcome_message']),
+        primaryColor: _asString(json['primary_color'], fallback: '#7C3AED'),
+        secondaryColor: _asString(json['secondary_color'], fallback: '#5B21B6'),
+        position: _asString(json['position'], fallback: 'RIGHT').toUpperCase(),
+        humanSupport: _asBool(json['human_support']),
+      );
 }
 
 class FeatureConfig {

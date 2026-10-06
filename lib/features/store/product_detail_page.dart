@@ -1,3 +1,5 @@
+import '../../core/localization/locale_controller.dart';
+import '../../core/localization/localized_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
@@ -112,48 +114,35 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     return null;
   }
 
-  double get _quantityReal {
-    final multiplier = _quantityOption?.quantityMultiplier;
-    if (multiplier != null && multiplier > 0) {
-      final visual = _quantityVisual.floor().clamp(1, 999999).toDouble();
-      return visual * multiplier;
-    }
-    final rules = _product.quantityRules;
-    if (rules?.isB2b == true) {
-      return _quantityVisual < 0.001 ? 0.001 : _quantityVisual;
-    }
-    return _quantityVisual.floor().clamp(1, 999999).toDouble();
-  }
+  QuantityRules get _quantityRules =>
+      _product.quantityRules ??
+      const QuantityRules(
+          customerType: 'B2C',
+          unit: 'UN',
+          defaultVisual: 1,
+          defaultReal: 1,
+          step: 1,
+          minimum: 1,
+          decimals: 0,
+          hasQuantityVariation: false);
 
-  int get _quantityDecimals {
-    if (_quantityOption != null) return 0;
-    return _product.quantityRules?.isB2b == true ? 3 : 0;
+  double get _quantityReal {
+    final visual = _quantityRules.normalize(_quantityVisual,
+        hasMultiplier: _quantityOption != null);
+    return visual * (_quantityOption?.quantityMultiplier ?? 1);
   }
 
   void _syncQuantityText() {
-    final text = _quantityDecimals == 0
-        ? _quantityVisual.floor().clamp(1, 999999).toString()
-        : _quantityVisual.toStringAsFixed(3);
+    final text = _quantityRules.inputText(_quantityVisual,
+        hasMultiplier: _quantityOption != null);
     _quantityController.value = TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
-    );
+        text: text, selection: TextSelection.collapsed(offset: text.length));
   }
 
   void _setQuantity(double value) {
-    final hasMultiplier = _quantityOption != null;
-    final b2b = _product.quantityRules?.isB2b == true;
-    if (hasMultiplier) {
-      value = value.floorToDouble();
-      if (value < 1) value = 1;
-    } else if (b2b) {
-      if (value < 0.001) value = 0.001;
-    } else {
-      value = value.floorToDouble();
-      if (value < 1) value = 1;
-    }
     setState(() {
-      _quantityVisual = value;
+      _quantityVisual = _quantityRules.normalize(value,
+          hasMultiplier: _quantityOption != null);
       _syncQuantityText();
     });
   }
@@ -161,17 +150,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   void _onManualQuantity(String raw) {
     final value = double.tryParse(raw.replaceAll(',', '.'));
     if (value == null) return;
-    final hasMultiplier = _quantityOption != null;
-    final b2b = _product.quantityRules?.isB2b == true;
-    setState(() {
-      if (hasMultiplier) {
-        _quantityVisual = value.floor().clamp(1, 999999).toDouble();
-      } else if (b2b) {
-        _quantityVisual = value < 0.001 ? 0.001 : value;
-      } else {
-        _quantityVisual = value.floor().clamp(1, 999999).toDouble();
-      }
-    });
+    setState(() => _quantityVisual = _quantityRules.normalize(value,
+        hasMultiplier: _quantityOption != null));
   }
 
   void _selectSingle(ProductOptionBlock block, int? id) {
@@ -197,9 +177,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   void _normalizeVisualAfterOptionChange() {
-    if (_quantityOption != null) {
-      _quantityVisual = _quantityVisual.floor().clamp(1, 999999).toDouble();
-    }
+    _quantityVisual = _quantityRules.normalize(_quantityVisual,
+        hasMultiplier: _quantityOption != null);
     _syncQuantityText();
   }
 
@@ -254,9 +233,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         for (final option in block.options) {
           final raw = _numberControllers[option.id]?.text.trim() ?? '';
           if (raw.isEmpty) continue;
-          groups
-              .putIfAbsent(block.name, () => <String>[])
-              .add(
+          groups.putIfAbsent(block.name, () => <String>[]).add(
                 '${option.observationText.isEmpty ? option.name : option.observationText}: ${raw.replaceAll('.', ',')}${(option.numberUnit ?? '').isEmpty ? '' : ' ${option.numberUnit}'}',
               );
         }
@@ -264,9 +241,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         for (final option in block.options.where(
           (o) => _selectedIds.contains(o.id),
         )) {
-          groups
-              .putIfAbsent(block.name, () => <String>[])
-              .add(
+          groups.putIfAbsent(block.name, () => <String>[]).add(
                 option.observationText.isEmpty
                     ? option.name
                     : option.observationText,
@@ -291,7 +266,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       if (mounted)
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: LText(e.message)));
     } finally {
       if (mounted) setState(() => _changingFavorite = false);
     }
@@ -302,7 +277,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (error != null) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(error)));
+      ).showSnackBar(SnackBar(content: LText(error)));
       return false;
     }
     widget.cart.addConfigured(
@@ -316,7 +291,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       observationSummary: _observationSummary(),
     );
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Produto adicionado ao carrinho.')),
+      const SnackBar(content: LText('Produto adicionado ao carrinho.')),
     );
     if (closePage) Navigator.of(context).pop(true);
     return true;
@@ -329,19 +304,19 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       final addCurrent = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Antes de continuar'),
-          content: Text(
+          title: const LText('Antes de continuar'),
+          content: LText(
             'Deseja adicionar “${_product.name}” ao carrinho antes de abrir “${target.name}”?',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Não, continuar'),
+              child: const LText('Não, continuar'),
             ),
             FilledButton.icon(
               onPressed: () => Navigator.of(dialogContext).pop(true),
               icon: const Icon(Icons.add_shopping_cart),
-              label: const Text('Adicionar e continuar'),
+              label: const LText('Adicionar e continuar'),
             ),
           ],
         ),
@@ -400,9 +375,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             html,
             baseUrl: _storeBaseUri(),
             textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: scheme.onSurface,
-              height: 1.48,
-            ),
+                  color: scheme.onSurface,
+                  height: 1.48,
+                ),
             customStylesBuilder: (element) {
               final tag = (element.localName ?? '').toLowerCase();
 
@@ -507,7 +482,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               return null;
             },
             onTapUrl: _openHtmlUrl,
-            onErrorBuilder: (context, element, error) => Text(
+            onErrorBuilder: (context, element, error) => LText(
               element.text,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
@@ -532,7 +507,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Produto'),
+        title: const LText('Produto'),
         actions: [
           IconButton(
             tooltip: _favorite ? 'Remover dos favoritos' : 'Favoritar',
@@ -558,7 +533,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           if (_error != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
+              child: LText(
                 _error!,
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
@@ -569,7 +544,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             repository: widget.repository,
           ),
           const SizedBox(height: 18),
-          Text(
+          LText(
             p.name,
             style: Theme.of(
               context,
@@ -595,14 +570,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           // Compra primeiro: as mesmas escolhas do site ficam antes da ficha técnica.
           if (p.optionBlocks.isNotEmpty) ...[
             const SizedBox(height: 18),
-            Text(
+            LText(
               'Personalize o item',
               style: Theme.of(
                 context,
               ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 6),
-            const Text(
+            const LText(
               'Escolha corte, preparo, porção/embalagem e demais opções disponíveis para este produto.',
             ),
             const SizedBox(height: 10),
@@ -624,7 +599,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           TextField(
             controller: _observationController,
             maxLines: 3,
-            decoration: const InputDecoration(
+            decoration: const LDecoration(
               labelText: 'Observações especiais',
               hintText: 'Ex.: preferência de corte, gordura...',
               prefixIcon: Icon(Icons.notes),
@@ -634,7 +609,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             const SizedBox(height: 22),
             _SectionCard(
               title: 'Informações do produto',
-              child: Text(p.fullDescription ?? p.description ?? ''),
+              child: LText(p.fullDescription ?? p.description ?? ''),
             ),
           ],
           if ((p.barcode ?? '').isNotEmpty ||
@@ -647,7 +622,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if ((p.barcode ?? '').isNotEmpty) ...[
-                    Text(
+                    LText(
                       'Código de barras: ${p.barcode}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
@@ -656,7 +631,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   if ((p.technicalInfoHtml ?? '').trim().isNotEmpty)
                     _technicalHtml(context, p.technicalInfoHtml!)
                   else if ((p.technicalInfo ?? '').trim().isNotEmpty)
-                    Text(
+                    LText(
                       p.technicalInfo!,
                       style: Theme.of(
                         context,
@@ -682,7 +657,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         child: FilledButton.icon(
           onPressed: p.available && !_loading ? _addToCart : null,
           icon: const Icon(Icons.add_shopping_cart),
-          label: Text(
+          label: LText(
             p.available
                 ? 'Adicionar ao carrinho · ${_money(pricing.subtotal)}'
                 : 'Indisponível',
@@ -706,10 +681,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         title: title,
         child: DropdownButtonFormField<int>(
           value: value,
-          decoration: const InputDecoration(hintText: 'Selecione...'),
+          decoration: const LDecoration(hintText: 'Selecione...'),
           items: block.options
               .map(
-                (o) => DropdownMenuItem<int>(value: o.id, child: Text(o.name)),
+                (o) => DropdownMenuItem<int>(
+                    value: o.id, child: LText(o.name, translate: false)),
               )
               .toList(),
           onChanged: (id) => _selectSingle(block, id),
@@ -734,7 +710,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 decoration: InputDecoration(
                   labelText: o.name,
                   suffixText: o.numberUnit,
-                  helperText: _rangeText(o),
+                  helperText: _rangeText(o) == null ? null : tr(_rangeText(o)!),
                 ),
               ),
             );
@@ -750,7 +726,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             return CheckboxListTile(
               value: _selectedIds.contains(o.id),
               contentPadding: EdgeInsets.zero,
-              title: Text(o.name),
+              title: LText(o.name, translate: false),
               controlAffinity: ListTileControlAffinity.leading,
               onChanged: (value) => _toggleCheckbox(o, value ?? false),
             );
@@ -765,7 +741,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         runSpacing: 8,
         children: block.options.map((o) {
           return ChoiceChip(
-            label: Text(o.name),
+            label: LText(o.name, translate: false),
             selected: _selectedIds.contains(o.id),
             onSelected: (_) => _selectSingle(block, o.id),
           );
@@ -793,20 +769,20 @@ class _ProductDetailPrice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mainStyle = Theme.of(context).textTheme.headlineMedium?.copyWith(
-      fontWeight: FontWeight.w900,
-      color: Theme.of(context).colorScheme.primary,
-    );
+          fontWeight: FontWeight.w900,
+          color: Theme.of(context).colorScheme.primary,
+        );
     final mode = product.priceDisplayMode.toUpperCase();
     if (mode == 'CHEIO_E_MENOR' && product.fractionPrice != null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          LText(
             'Preço cheio: ${_money(product.price)}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 2),
-          Text(
+          LText(
             '${_money(product.fractionPrice!)} ${product.fractionLabel ?? ''}',
             style: mainStyle,
           ),
@@ -814,7 +790,7 @@ class _ProductDetailPrice extends StatelessWidget {
       );
     }
     if (mode == 'PRECO_MENOR' && product.fractionPrice != null) {
-      return Text(
+      return LText(
         '${_money(product.fractionPrice!)} ${product.fractionLabel ?? ''}',
         style: mainStyle,
       );
@@ -823,13 +799,13 @@ class _ProductDetailPrice extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (product.hasOffer)
-          Text(
+          LText(
             _money(product.oldPrice!),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              decoration: TextDecoration.lineThrough,
-            ),
+                  decoration: TextDecoration.lineThrough,
+                ),
           ),
-        Text(_money(product.price), style: mainStyle),
+        LText(_money(product.price), style: mainStyle),
       ],
     );
   }
@@ -864,7 +840,7 @@ class _GalleryState extends State<_Gallery> {
     if (uri == null || !uri.hasScheme) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Link de vídeo inválido.')),
+          const SnackBar(content: LText('Link de vídeo inválido.')),
         );
       }
       return;
@@ -872,7 +848,7 @@ class _GalleryState extends State<_Gallery> {
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Não foi possível abrir o vídeo.')),
+        const SnackBar(content: LText('Não foi possível abrir o vídeo.')),
       );
     }
   }
@@ -958,7 +934,7 @@ class _GalleryState extends State<_Gallery> {
                                         horizontal: 12,
                                         vertical: 9,
                                       ),
-                                      child: Text(
+                                      child: LText(
                                         'Vídeo do produto · toque para reproduzir',
                                         textAlign: TextAlign.center,
                                         style: TextStyle(
@@ -1042,7 +1018,7 @@ class _RecommendationsSection extends StatelessWidget {
             final image = product.imageUrl == null
                 ? null
                 : (repository.api.resolvePublicUrl(product.imageUrl!) ??
-                      product.imageUrl!);
+                    product.imageUrl!);
 
             return SizedBox(
               width: 150,
@@ -1077,7 +1053,7 @@ class _RecommendationsSection extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Text(
+                        LText(
                           product.name,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -1088,9 +1064,11 @@ class _RecommendationsSection extends StatelessWidget {
                         ),
                         const SizedBox(height: 5),
                         if (product.hasOffer)
-                          Text(
+                          LText(
                             _money(product.oldPrice!),
-                            style: Theme.of(context).textTheme.labelSmall
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
                                 ?.copyWith(
                                   decoration: TextDecoration.lineThrough,
                                   color: Theme.of(
@@ -1098,7 +1076,7 @@ class _RecommendationsSection extends StatelessWidget {
                                   ).colorScheme.onSurfaceVariant,
                                 ),
                           ),
-                        Text(
+                        LText(
                           product.fractionPrice != null &&
                                   product.priceDisplayMode.toUpperCase() !=
                                       'PRECO_CHEIO'
@@ -1112,7 +1090,7 @@ class _RecommendationsSection extends StatelessWidget {
                         ),
                         if ((product.fractionLabel ?? '').trim().isNotEmpty &&
                             product.fractionPrice != null)
-                          Text(
+                          LText(
                             product.fractionLabel!,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -1155,9 +1133,8 @@ class _CampaignBox extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: pricing.applied
-            ? const Color(0xFFF0FDF4)
-            : const Color(0xFFFFFBEB),
+        color:
+            pricing.applied ? const Color(0xFFF0FDF4) : const Color(0xFFFFFBEB),
         border: Border.all(
           color: pricing.applied
               ? const Color(0xFFBBF7D0)
@@ -1179,13 +1156,13 @@ class _CampaignBox extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                LText(
                   title,
                   style: const TextStyle(fontWeight: FontWeight.w900),
                 ),
                 if ((pricing.message ?? '').isNotEmpty) ...[
                   const SizedBox(height: 3),
-                  Text(pricing.message!, style: const TextStyle(fontSize: 12)),
+                  LText(pricing.message!, style: const TextStyle(fontSize: 12)),
                 ],
               ],
             ),
@@ -1220,8 +1197,9 @@ class _QuantityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isB2b = product.quantityRules?.isB2b == true;
-    final decimals = quantityOption != null ? 0 : (isB2b ? 3 : 0);
+    final rules = product.quantityRules;
+    final decimals = quantityOption != null ? 0 : (rules?.inputDecimals ?? 0);
+    final shifted = quantityOption == null && rules?.usesShiftInput == true;
     final visualLabel = quantityOption?.quantityText?.trim().isNotEmpty == true
         ? quantityOption!.quantityText!
         : 'Quantidade';
@@ -1232,7 +1210,7 @@ class _QuantityCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            LText(
               visualLabel,
               style: const TextStyle(fontWeight: FontWeight.w900),
             ),
@@ -1250,14 +1228,32 @@ class _QuantityCard extends StatelessWidget {
                     controller: controller,
                     textAlign: TextAlign.center,
                     keyboardType: TextInputType.numberWithOptions(
-                      decimal: decimals > 0,
+                      decimal: decimals > 0 && !shifted,
                     ),
                     inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                        RegExp(decimals > 0 ? r'[0-9,.]' : r'[0-9]'),
-                      ),
+                      if (shifted)
+                        _ShiftQuantityFormatter(rules!)
+                      else
+                        TextInputFormatter.withFunction((oldValue, newValue) {
+                          final pattern = decimals > 0
+                              ? RegExp('^\\d*(?:[,.]\\d{0,$decimals})?\$')
+                              : RegExp(r'^\d*$');
+                          return pattern.hasMatch(newValue.text)
+                              ? newValue
+                              : oldValue;
+                        }),
                     ],
                     onChanged: onChanged,
+                    onEditingComplete: () {
+                      final text = rules?.inputText(quantityVisual,
+                              hasMultiplier: quantityOption != null) ??
+                          quantityVisual.floor().clamp(1, 999999).toString();
+                      controller.value = TextEditingValue(
+                          text: text,
+                          selection:
+                              TextSelection.collapsed(offset: text.length));
+                      FocusScope.of(context).unfocus();
+                    },
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1269,14 +1265,14 @@ class _QuantityCard extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(
+                    LText(
                       'Total estimado',
                       style: TextStyle(
                         fontSize: 11,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    Text(
+                    LText(
                       _money(subtotal),
                       style: const TextStyle(
                         fontSize: 19,
@@ -1289,7 +1285,7 @@ class _QuantityCard extends StatelessWidget {
             ),
             if (quantityOption != null) ...[
               const SizedBox(height: 8),
-              Text(
+              LText(
                 'Pedido será gerado em ${product.unit ?? 'UN'}: ${formatQuantity(quantityReal, 3)} ${product.unit ?? ''}',
                 style: TextStyle(
                   fontSize: 12,
@@ -1297,10 +1293,10 @@ class _QuantityCard extends StatelessWidget {
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
-            ] else if (isB2b) ...[
+            ] else if (decimals > 0) ...[
               const SizedBox(height: 8),
-              Text(
-                'Quantidade aceita até 3 casas decimais. Mínimo 0,001 ${product.unit ?? ''}.',
+              LText(
+                'Quantidade aceita até $decimals casas decimais. Mínimo ${formatQuantity(rules?.minimum ?? 1, decimals)} ${product.unit ?? ''}.${shifted ? ' Digite os números; a vírgula é automática.' : ''}',
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -1320,19 +1316,19 @@ class _SectionCard extends StatelessWidget {
   final Widget child;
   @override
   Widget build(BuildContext context) => Card(
-    margin: const EdgeInsets.only(bottom: 10),
-    child: Padding(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
-          const SizedBox(height: 10),
-          child,
-        ],
-      ),
-    ),
-  );
+        margin: const EdgeInsets.only(bottom: 10),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              LText(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 10),
+              child,
+            ],
+          ),
+        ),
+      );
 }
 
 class _InfoPill extends StatelessWidget {
@@ -1340,16 +1336,17 @@ class _InfoPill extends StatelessWidget {
   final String text;
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.primaryContainer.withOpacity(.45),
-      borderRadius: BorderRadius.circular(999),
-    ),
-    child: Text(
-      text,
-      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-    ),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
+          color:
+              Theme.of(context).colorScheme.primaryContainer.withOpacity(.45),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: LText(
+          text,
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+        ),
+      );
 }
 
 String _money(double value) =>
@@ -1359,4 +1356,20 @@ String _unitText(String? unit) {
   return ['UN', 'UND', 'UNID', 'UNIDADE'].contains(value)
       ? 'a unidade'
       : 'por $value';
+}
+
+class _ShiftQuantityFormatter extends TextInputFormatter {
+  _ShiftQuantityFormatter(this.rules);
+  final QuantityRules rules;
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    if (!newValue.composing.isCollapsed) return newValue;
+    if (!RegExp(r'^[0-9,.]*$').hasMatch(newValue.text)) return oldValue;
+    final text = rules.shiftText(newValue.text);
+    if (text.length > 12) return oldValue;
+    return TextEditingValue(
+        text: text, selection: TextSelection.collapsed(offset: text.length));
+  }
 }

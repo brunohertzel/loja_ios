@@ -1,3 +1,4 @@
+import '../../core/localization/localized_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -24,43 +25,43 @@ class _BarcodeScannerPageState extends State<BarcodeScannerPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Ler código de barras')),
-    body: Stack(
-      fit: StackFit.expand,
-      children: [
-        MobileScanner(onDetect: _onDetect),
-        IgnorePointer(
-          child: Center(
-            child: Container(
-              width: 285,
-              height: 150,
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.primary,
-                  width: 3,
+        appBar: AppBar(title: const LText('Ler código de barras')),
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            MobileScanner(onDetect: _onDetect),
+            IgnorePointer(
+              child: Center(
+                child: Container(
+                  width: 285,
+                  height: 150,
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 3,
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
                 ),
-                borderRadius: BorderRadius.circular(18),
               ),
             ),
-          ),
-        ),
-        Align(
-          alignment: Alignment.bottomCenter,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-            color: Colors.black.withOpacity(.62),
-            child: const Text(
-              'Aponte a câmera para o código de barras do produto.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
+                color: Colors.black.withOpacity(.62),
+                child: const LText(
+                  'Aponte a câmera para o código de barras do produto.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ),
-          ),
+          ],
         ),
-      ],
-    ),
-  );
+      );
 }

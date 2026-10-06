@@ -86,8 +86,12 @@ Future<void> main(List<String> args) async {
     final req = await client.getUrl(uri);
     req.headers.set('Accept', 'application/json');
     req.headers.set('X-Soft-Platform', 'IOS');
-    req.headers.set('X-Soft-App-Version', '1.6.28');
-    req.headers.set('X-Soft-App-Build', '186');
+    final localRelease = RegExp(
+      r'^version:\s*([^+\s]+)\+(\d+)',
+      multiLine: true,
+    ).firstMatch(await File('pubspec.yaml').readAsString());
+    req.headers.set('X-Soft-App-Version', localRelease?.group(1) ?? '');
+    req.headers.set('X-Soft-App-Build', localRelease?.group(2) ?? '');
     final res = await req.close();
     final text = await utf8.decoder.bind(res).join();
     if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -117,6 +121,22 @@ Future<void> main(List<String> args) async {
       'Bundle ID iOS vazio. Configure em Admin > Mobile > iOS antes de compilar.',
     );
   }
+
+  final version = _s(app['current_version']);
+  final build = _s(app['current_build']);
+  if (!RegExp(r'^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$').hasMatch(version) ||
+      int.tryParse(build) == null ||
+      int.parse(build) < 1) {
+    throw StateError('Configure a versão e o build em Admin > Mobile > iOS.');
+  }
+  final pubspec = File('pubspec.yaml');
+  await _writeText(
+    pubspec.path,
+    (await pubspec.readAsString()).replaceFirst(
+      RegExp(r'^version:.*$', multiLine: true),
+      'version: $version+$build',
+    ),
+  );
 
   final iconIos = _s(app['icon_ios_url'], _s(app['logo_url']));
   final buildAt = DateTime.now().toIso8601String();

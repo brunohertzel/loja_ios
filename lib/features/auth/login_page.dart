@@ -1,3 +1,4 @@
+import '../../core/localization/localized_widgets.dart';
 import '../../core/config/platform_info.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -78,8 +79,7 @@ class _LoginPageState extends State<LoginPage> {
       _remember = widget.bootstrap.security.rememberMe
           ? (remembered || refresh == null || refresh.isEmpty)
           : false;
-      _canBiometric =
-          widget.bootstrap.security.biometrics &&
+      _canBiometric = widget.bootstrap.security.biometrics &&
           biometricEnabled &&
           refresh != null &&
           refresh.isNotEmpty &&
@@ -122,28 +122,30 @@ class _LoginPageState extends State<LoginPage> {
         final enable = await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
-            title: const Text('Ativar login por biometria?'),
-            content: const Text(
+            title: const LText('Ativar login por biometria?'),
+            content: const LText(
               'A senha nao sera armazenada. A biometria deste aparelho apenas '
               'libera a sessao segura salva no dispositivo.',
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Agora nao'),
+                child: const LText('Agora nao'),
               ),
               FilledButton.icon(
                 onPressed: () => Navigator.pop(dialogContext, true),
                 icon: const Icon(Icons.fingerprint),
-                label: const Text('Ativar'),
+                label: const LText('Ativar'),
               ),
             ],
           ),
         );
 
+        if (!mounted) return;
         if (enable == true) {
           final confirmed = await widget.biometrics.authenticate(
-            reason: 'Confirme sua biometria para ativar o login rapido',
+            reason: 'Confirme sua biometria para ativar o login rápido',
+            locale: Localizations.localeOf(context),
           );
           if (confirmed) {
             try {
@@ -213,9 +215,8 @@ class _LoginPageState extends State<LoginPage> {
         );
       }
       try {
-        final rememberGoogle = widget.bootstrap.security.rememberMe
-            ? _remember
-            : true;
+        final rememberGoogle =
+            widget.bootstrap.security.rememberMe ? _remember : true;
         await widget.auth.googleLogin(
           idToken: idToken,
           rememberMe: rememberGoogle,
@@ -279,7 +280,8 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      final confirmed = await widget.biometrics.authenticate();
+      final confirmed = await widget.biometrics
+          .authenticate(locale: Localizations.localeOf(context));
       if (!confirmed) {
         if (mounted) setState(() => _error = 'Biometria não confirmada.');
         return;
@@ -325,19 +327,23 @@ class _LoginPageState extends State<LoginPage> {
                     children: [
                       Center(child: BrandLogo(logoUrl: logo)),
                       const SizedBox(height: 14),
-                      Text(
+                      LText(
                         GeneratedAppConfig.appName,
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.headlineSmall
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
                             ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(height: 5),
-                      Text(
+                      LText(
                         'Confirme sua identidade para entrar',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
                       ),
                       const SizedBox(height: 26),
                       TextField(
@@ -345,7 +351,7 @@ class _LoginPageState extends State<LoginPage> {
                         keyboardType: TextInputType.emailAddress,
                         textInputAction: TextInputAction.next,
                         autofillHints: const [AutofillHints.username],
-                        decoration: const InputDecoration(
+                        decoration: const LDecoration(
                           labelText: 'E-mail ou CPF/CNPJ',
                           prefixIcon: Icon(Icons.person_outline),
                         ),
@@ -359,7 +365,7 @@ class _LoginPageState extends State<LoginPage> {
                         onSubmitted: (_) {
                           if (!_loading) _login();
                         },
-                        decoration: InputDecoration(
+                        decoration: LDecoration(
                           labelText: 'Senha',
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
@@ -377,7 +383,7 @@ class _LoginPageState extends State<LoginPage> {
                         alignment: Alignment.centerRight,
                         child: TextButton(
                           onPressed: _loading ? null : _forgotPassword,
-                          child: const Text('Esqueci minha senha'),
+                          child: const LText('Esqueci minha senha'),
                         ),
                       ),
                       if (widget.bootstrap.security.rememberMe)
@@ -385,11 +391,11 @@ class _LoginPageState extends State<LoginPage> {
                           contentPadding: EdgeInsets.zero,
                           value: _remember,
                           controlAffinity: ListTileControlAffinity.leading,
-                          title: const Text('Manter conectado'),
+                          title: const LText('Manter conectado'),
                           onChanged: _loading
                               ? null
                               : (value) =>
-                                    setState(() => _remember = value ?? false),
+                                  setState(() => _remember = value ?? false),
                         ),
                       if (_error != null) ...[
                         const SizedBox(height: 4),
@@ -401,7 +407,7 @@ class _LoginPageState extends State<LoginPage> {
                             ).colorScheme.errorContainer.withOpacity(.55),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Text(
+                          child: LText(
                             _error!,
                             style: TextStyle(
                               color: Theme.of(
@@ -424,7 +430,7 @@ class _LoginPageState extends State<LoginPage> {
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : const Text('ENTRAR'),
+                              : const LText('ENTRAR'),
                         ),
                       ),
                       if (_canBiometric) ...[
@@ -434,7 +440,7 @@ class _LoginPageState extends State<LoginPage> {
                           icon: const Icon(Icons.fingerprint),
                           label: const Padding(
                             padding: EdgeInsets.symmetric(vertical: 12),
-                            child: Text('Entrar com biometria'),
+                            child: LText('Entrar com biometria'),
                           ),
                         ),
                       ],
@@ -445,7 +451,7 @@ class _LoginPageState extends State<LoginPage> {
                           icon: const Icon(Icons.g_mobiledata, size: 28),
                           label: const Padding(
                             padding: EdgeInsets.symmetric(vertical: 12),
-                            child: Text('Continuar com Google'),
+                            child: LText('Continuar com Google'),
                           ),
                         ),
                       ],
@@ -456,18 +462,20 @@ class _LoginPageState extends State<LoginPage> {
                           icon: const Icon(Icons.person_add_alt_1),
                           label: const Padding(
                             padding: EdgeInsets.symmetric(vertical: 10),
-                            child: Text('Criar uma conta'),
+                            child: LText('Criar uma conta'),
                           ),
                         ),
                       ],
                       const SizedBox(height: 18),
-                      Text(
+                      LText(
                         '${PlatformInfo.label} • ${widget.api.device.appVersion}+'
                         '${widget.api.device.appBuild}',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
                       ),
                     ],
                   ),

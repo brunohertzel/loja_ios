@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 class StoreBanner {
   const StoreBanner({
     required this.id,
@@ -13,14 +15,14 @@ class StoreBanner {
   final String? link;
 
   factory StoreBanner.fromJson(Map<String, dynamic> json) => StoreBanner(
-    id: _s(json['id'], ''),
-    title: _s(json['title'] ?? json['titulo'], 'Oferta'),
-    subtitle: _nullable(json['subtitle'] ?? json['subtitulo']),
-    imageUrl: _nullable(
-      json['image_url'] ?? json['imagem_url'] ?? json['imagem'],
-    ),
-    link: _nullable(json['link'] ?? json['url']),
-  );
+        id: _s(json['id'], ''),
+        title: _s(json['title'] ?? json['titulo'], 'Oferta'),
+        subtitle: _nullable(json['subtitle'] ?? json['subtitulo']),
+        imageUrl: _nullable(
+          json['image_url'] ?? json['imagem_url'] ?? json['imagem'],
+        ),
+        link: _nullable(json['link'] ?? json['url']),
+      );
 }
 
 class StoreCategory {
@@ -30,12 +32,13 @@ class StoreCategory {
   final String? imageUrl;
 
   factory StoreCategory.fromJson(Map<String, dynamic> json) => StoreCategory(
-    id: _s(json['id'] ?? json['codigo'], ''),
-    name: _s(json['name'] ?? json['nome'] ?? json['descricao'], 'Categoria'),
-    imageUrl: _nullable(
-      json['image_url'] ?? json['imagem_url'] ?? json['imagem'],
-    ),
-  );
+        id: _s(json['id'] ?? json['codigo'], ''),
+        name:
+            _s(json['name'] ?? json['nome'] ?? json['descricao'], 'Categoria'),
+        imageUrl: _nullable(
+          json['image_url'] ?? json['imagem_url'] ?? json['imagem'],
+        ),
+      );
 }
 
 class QuantityRules {
@@ -48,6 +51,8 @@ class QuantityRules {
     required this.minimum,
     required this.decimals,
     required this.hasQuantityVariation,
+    this.fractionalEnabled = false,
+    this.decimalInputMode = 'DECIMAL',
   });
 
   final String customerType;
@@ -58,33 +63,71 @@ class QuantityRules {
   final double minimum;
   final int decimals;
   final bool hasQuantityVariation;
+  final bool fractionalEnabled;
+  final String decimalInputMode;
+
+  int get inputDecimals => fractionalEnabled ? decimals.clamp(1, 3) : 0;
+  bool get usesShiftInput => inputDecimals > 0 && decimalInputMode == 'SHIFT';
+
+  double normalize(double value, {bool hasMultiplier = false}) {
+    if (!value.isFinite) value = 1;
+    final places = hasMultiplier ? 0 : inputDecimals;
+    if (places == 0) return value.floorToDouble().clamp(1, 999999).toDouble();
+    final factor = math.pow(10, places).toDouble();
+    final lower = minimum.isFinite && minimum > 0 ? minimum : 1 / factor;
+    return (math.max(lower, value) * factor).round() / factor;
+  }
+
+  String inputText(double value, {bool hasMultiplier = false}) {
+    final places = hasMultiplier ? 0 : inputDecimals;
+    return normalize(value, hasMultiplier: hasMultiplier)
+        .toStringAsFixed(places)
+        .replaceAll('.', ',');
+  }
+
+  String shiftText(String raw) {
+    final digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return '';
+    final value = double.tryParse(digits);
+    if (value == null || !value.isFinite) return '';
+    return (value / math.pow(10, inputDecimals))
+        .toStringAsFixed(inputDecimals)
+        .replaceAll('.', ',');
+  }
 
   bool get isB2b => customerType.toUpperCase() == 'B2B';
 
   factory QuantityRules.fromJson(
     Map<String, dynamic> json, {
     String unit = 'UN',
-  }) => QuantityRules(
-    customerType: _s(json['customer_type'], 'B2C').toUpperCase(),
-    unit: _s(json['unit'], unit),
-    defaultVisual: _d(json['default_visual'], fallback: 1),
-    defaultReal: _d(json['default_real'], fallback: 1),
-    step: _d(json['step'], fallback: 1),
-    minimum: _d(json['minimum'], fallback: 1),
-    decimals: _i(json['decimals']),
-    hasQuantityVariation: _b(json['has_quantity_variation'], false),
-  );
+  }) =>
+      QuantityRules(
+        customerType: _s(json['customer_type'], 'B2C').toUpperCase(),
+        unit: _s(json['unit'], unit),
+        defaultVisual: _d(json['default_visual'], fallback: 1),
+        defaultReal: _d(json['default_real'], fallback: 1),
+        step: _d(json['step'], fallback: 1),
+        minimum: _d(json['minimum'], fallback: 1),
+        decimals: _i(json['decimals']).clamp(0, 3),
+        fractionalEnabled:
+            _b(json['fractional_enabled'], _i(json['decimals']) > 0),
+        decimalInputMode:
+            _s(json['decimal_input_mode'], 'DECIMAL').toUpperCase(),
+        hasQuantityVariation: _b(json['has_quantity_variation'], false),
+      );
 
   Map<String, dynamic> toJson() => {
-    'customer_type': customerType,
-    'unit': unit,
-    'default_visual': defaultVisual,
-    'default_real': defaultReal,
-    'step': step,
-    'minimum': minimum,
-    'decimals': decimals,
-    'has_quantity_variation': hasQuantityVariation,
-  };
+        'customer_type': customerType,
+        'unit': unit,
+        'default_visual': defaultVisual,
+        'default_real': defaultReal,
+        'step': step,
+        'minimum': minimum,
+        'decimals': decimals,
+        'has_quantity_variation': hasQuantityVariation,
+        'fractional_enabled': fractionalEnabled,
+        'decimal_input_mode': decimalInputMode,
+      };
 }
 
 class StoreCampaign {
@@ -111,34 +154,34 @@ class StoreCampaign {
   final String kind;
 
   factory StoreCampaign.fromJson(Map<String, dynamic> json) => StoreCampaign(
-    id: _i(json['id']),
-    name: _s(json['name'] ?? json['nome'], 'Promoção'),
-    type: _s(json['type'] ?? json['tipo'], 'SIMPLES').toUpperCase(),
-    offerPrice: _d(json['offer_price'] ?? json['preco_oferta']),
-    minimumQuantity: _d(
-      json['minimum_quantity'] ?? json['qtde_minima_ativar'],
-      fallback: 1,
-    ),
-    paidQuantity: _d(
-      json['paid_quantity'] ?? json['qtde_preco_normal'],
-      fallback: 1,
-    ),
-    startsAt: _nullable(json['starts_at'] ?? json['data_inicial']),
-    endsAt: _nullable(json['ends_at'] ?? json['data_final']),
-    kind: _s(json['kind'] ?? json['tipo_oferta'], 'STANDARD').toUpperCase(),
-  );
+        id: _i(json['id']),
+        name: _s(json['name'] ?? json['nome'], 'Promoção'),
+        type: _s(json['type'] ?? json['tipo'], 'SIMPLES').toUpperCase(),
+        offerPrice: _d(json['offer_price'] ?? json['preco_oferta']),
+        minimumQuantity: _d(
+          json['minimum_quantity'] ?? json['qtde_minima_ativar'],
+          fallback: 1,
+        ),
+        paidQuantity: _d(
+          json['paid_quantity'] ?? json['qtde_preco_normal'],
+          fallback: 1,
+        ),
+        startsAt: _nullable(json['starts_at'] ?? json['data_inicial']),
+        endsAt: _nullable(json['ends_at'] ?? json['data_final']),
+        kind: _s(json['kind'] ?? json['tipo_oferta'], 'STANDARD').toUpperCase(),
+      );
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'type': type,
-    'offer_price': offerPrice,
-    'minimum_quantity': minimumQuantity,
-    'paid_quantity': paidQuantity,
-    'starts_at': startsAt,
-    'ends_at': endsAt,
-    'kind': kind,
-  };
+        'id': id,
+        'name': name,
+        'type': type,
+        'offer_price': offerPrice,
+        'minimum_quantity': minimumQuantity,
+        'paid_quantity': paidQuantity,
+        'starts_at': startsAt,
+        'ends_at': endsAt,
+        'kind': kind,
+      };
 }
 
 class ProductOption {
@@ -169,40 +212,41 @@ class ProductOption {
   final bool isDefault;
 
   factory ProductOption.fromJson(Map<String, dynamic> json) => ProductOption(
-    id: _i(json['id']),
-    name: _s(json['name'] ?? json['descricao'], 'Opção'),
-    observationText: _s(
-      json['observation_text'] ?? json['valor_obs'] ?? json['name'],
-      '',
-    ),
-    numberMin: _nullableDouble(json['number_min'] ?? json['numero_min']),
-    numberMax: _nullableDouble(json['number_max'] ?? json['numero_max']),
-    numberStep: _d(json['number_step'] ?? json['numero_step'], fallback: 1),
-    numberUnit: _nullable(json['number_unit'] ?? json['numero_unidade']),
-    affectsQuantity: _b(
-      json['affects_quantity'] ?? json['afeta_quantidade'],
-      false,
-    ),
-    quantityMultiplier: _nullableDouble(
-      json['quantity_multiplier'] ?? json['multiplicador_quantidade'],
-    ),
-    quantityText: _nullable(json['quantity_text'] ?? json['texto_quantidade']),
-    isDefault: _b(json['default'] ?? json['padrao'], false),
-  );
+        id: _i(json['id']),
+        name: _s(json['name'] ?? json['descricao'], 'Opção'),
+        observationText: _s(
+          json['observation_text'] ?? json['valor_obs'] ?? json['name'],
+          '',
+        ),
+        numberMin: _nullableDouble(json['number_min'] ?? json['numero_min']),
+        numberMax: _nullableDouble(json['number_max'] ?? json['numero_max']),
+        numberStep: _d(json['number_step'] ?? json['numero_step'], fallback: 1),
+        numberUnit: _nullable(json['number_unit'] ?? json['numero_unidade']),
+        affectsQuantity: _b(
+          json['affects_quantity'] ?? json['afeta_quantidade'],
+          false,
+        ),
+        quantityMultiplier: _nullableDouble(
+          json['quantity_multiplier'] ?? json['multiplicador_quantidade'],
+        ),
+        quantityText:
+            _nullable(json['quantity_text'] ?? json['texto_quantidade']),
+        isDefault: _b(json['default'] ?? json['padrao'], false),
+      );
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'observation_text': observationText,
-    'number_min': numberMin,
-    'number_max': numberMax,
-    'number_step': numberStep,
-    'number_unit': numberUnit,
-    'affects_quantity': affectsQuantity,
-    'quantity_multiplier': quantityMultiplier,
-    'quantity_text': quantityText,
-    'default': isDefault,
-  };
+        'id': id,
+        'name': name,
+        'observation_text': observationText,
+        'number_min': numberMin,
+        'number_max': numberMax,
+        'number_step': numberStep,
+        'number_unit': numberUnit,
+        'affects_quantity': affectsQuantity,
+        'quantity_multiplier': quantityMultiplier,
+        'quantity_text': quantityText,
+        'default': isDefault,
+      };
 }
 
 class ProductOptionBlock {
@@ -235,13 +279,13 @@ class ProductOptionBlock {
       );
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'type': type,
-    'required': isRequired,
-    'icon': icon,
-    'options': options.map((e) => e.toJson()).toList(),
-  };
+        'id': id,
+        'name': name,
+        'type': type,
+        'required': isRequired,
+        'icon': icon,
+        'options': options.map((e) => e.toJson()).toList(),
+      };
 }
 
 class StoreProduct {
@@ -403,39 +447,39 @@ class StoreProduct {
   }
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'price': price,
-    'old_price': oldPrice,
-    'image_url': imageUrl,
-    'description': description,
-    'full_description': fullDescription,
-    'technical_info': technicalInfo,
-    'technical_info_html': technicalInfoHtml,
-    'recommendations': recommendations.map((e) => e.toJson()).toList(),
-    'unit': unit,
-    'category_id': categoryId,
-    'code': code,
-    'barcode': barcode,
-    'brand': brand,
-    'department': department,
-    'sponsored': sponsored,
-    'price_display': {
-      'mode': priceDisplayMode,
-      'fraction_price': fractionPrice,
-      'fraction_label': fractionLabel,
-    },
-    'video_url': videoUrl,
-    'available': available,
-    'favorite': favorite,
-    'step': step,
-    'gallery': gallery,
-    'option_blocks': optionBlocks.map((e) => e.toJson()).toList(),
-    'quantity_rules': quantityRules?.toJson(),
-    'campaign': campaign?.toJson(),
-    'free_freight_delivery': freeFreightDelivery,
-    'free_freight_wholesale': freeFreightWholesale,
-  };
+        'id': id,
+        'name': name,
+        'price': price,
+        'old_price': oldPrice,
+        'image_url': imageUrl,
+        'description': description,
+        'full_description': fullDescription,
+        'technical_info': technicalInfo,
+        'technical_info_html': technicalInfoHtml,
+        'recommendations': recommendations.map((e) => e.toJson()).toList(),
+        'unit': unit,
+        'category_id': categoryId,
+        'code': code,
+        'barcode': barcode,
+        'brand': brand,
+        'department': department,
+        'sponsored': sponsored,
+        'price_display': {
+          'mode': priceDisplayMode,
+          'fraction_price': fractionPrice,
+          'fraction_label': fractionLabel,
+        },
+        'video_url': videoUrl,
+        'available': available,
+        'favorite': favorite,
+        'step': step,
+        'gallery': gallery,
+        'option_blocks': optionBlocks.map((e) => e.toJson()).toList(),
+        'quantity_rules': quantityRules?.toJson(),
+        'campaign': campaign?.toJson(),
+        'free_freight_delivery': freeFreightDelivery,
+        'free_freight_wholesale': freeFreightWholesale,
+      };
 }
 
 class CampaignPriceResult {
@@ -539,23 +583,23 @@ enum StoreProductSort {
 
 extension StoreProductSortX on StoreProductSort {
   String get apiValue => switch (this) {
-    StoreProductSort.az => 'AZ',
-    StoreProductSort.za => 'ZA',
-    StoreProductSort.priceAsc => 'PRECO_ASC',
-    StoreProductSort.priceDesc => 'PRECO_DESC',
-    StoreProductSort.departmentAsc => 'DEP_ASC',
-    StoreProductSort.departmentDesc => 'DEP_DESC',
-    _ => 'PADRAO',
-  };
+        StoreProductSort.az => 'AZ',
+        StoreProductSort.za => 'ZA',
+        StoreProductSort.priceAsc => 'PRECO_ASC',
+        StoreProductSort.priceDesc => 'PRECO_DESC',
+        StoreProductSort.departmentAsc => 'DEP_ASC',
+        StoreProductSort.departmentDesc => 'DEP_DESC',
+        _ => 'PADRAO',
+      };
   String get label => switch (this) {
-    StoreProductSort.az => 'A-Z',
-    StoreProductSort.za => 'Z-A',
-    StoreProductSort.priceAsc => 'Preço: menor → maior',
-    StoreProductSort.priceDesc => 'Preço: maior → menor',
-    StoreProductSort.departmentAsc => 'Departamento: A-Z',
-    StoreProductSort.departmentDesc => 'Departamento: Z-A',
-    _ => 'Padrão: ofertas e favoritos',
-  };
+        StoreProductSort.az => 'A-Z',
+        StoreProductSort.za => 'Z-A',
+        StoreProductSort.priceAsc => 'Preço: menor → maior',
+        StoreProductSort.priceDesc => 'Preço: maior → menor',
+        StoreProductSort.departmentAsc => 'Departamento: A-Z',
+        StoreProductSort.departmentDesc => 'Departamento: Z-A',
+        _ => 'Padrão: ofertas e favoritos',
+      };
 }
 
 class StoreSponsoredCampaign {
@@ -600,47 +644,50 @@ class StoreSponsoredCampaign {
 
   factory StoreSponsoredCampaign.fromJson(
     Map<String, dynamic> json,
-  ) => StoreSponsoredCampaign(
-    id: _s(json['id'] ?? json['campaign_id'], ''),
-    name: _s(json['name'] ?? json['nome'], 'Campanhas em destaque'),
-    description: _nullable(json['description'] ?? json['descricao']),
-    bannerUrl: _nullable(
-      json['banner_url'] ?? json['imagem_url'] ?? json['banner'],
-    ),
-    sponsorName: _nullable(json['sponsor_name'] ?? json['patrocinador_nome']),
-    sponsorLogoUrl: _nullable(
-      json['sponsor_logo_url'] ?? json['patrocinador_logo_url'],
-    ),
-    heroImageUrl: _nullable(
-      json['hero_image_url'] ??
-          json['campaign_image_url'] ??
-          json['imagem_principal'] ??
-          json['banner_url'],
-    ),
-    campaignUrl: _nullable(json['campaign_url'] ?? json['url_campanha']),
-    skinId: _nullable(json['skin_id']),
-    source: _nullable(json['source']),
-    backgroundColor: _nullable(json['background_color'] ?? json['cor_fundo']),
-    backgroundImageUrl: _nullable(
-      json['background_image_url'] ??
-          json['background_url'] ??
-          json['imagem_fundo'],
-    ),
-    borderColor: _nullable(json['border_color'] ?? json['cor_borda']),
-    textColor: _nullable(json['text_color'] ?? json['cor_texto']),
-    accentColor: _nullable(
-      json['accent_color'] ?? json['cor_destaque'] ?? json['primary_color'],
-    ),
-    visualAssets: _stringList(
-      json['visual_assets'] ?? json['asset_candidates'],
-    ),
-    backgroundAssets: _stringList(
-      json['background_assets'] ?? json['wallpaper_assets'],
-    ),
-    products: _list(
-      json['products'] ?? json['produtos'],
-    ).map(StoreProduct.fromJson).toList(),
-  );
+  ) =>
+      StoreSponsoredCampaign(
+        id: _s(json['id'] ?? json['campaign_id'], ''),
+        name: _s(json['name'] ?? json['nome'], 'Campanhas em destaque'),
+        description: _nullable(json['description'] ?? json['descricao']),
+        bannerUrl: _nullable(
+          json['banner_url'] ?? json['imagem_url'] ?? json['banner'],
+        ),
+        sponsorName:
+            _nullable(json['sponsor_name'] ?? json['patrocinador_nome']),
+        sponsorLogoUrl: _nullable(
+          json['sponsor_logo_url'] ?? json['patrocinador_logo_url'],
+        ),
+        heroImageUrl: _nullable(
+          json['hero_image_url'] ??
+              json['campaign_image_url'] ??
+              json['imagem_principal'] ??
+              json['banner_url'],
+        ),
+        campaignUrl: _nullable(json['campaign_url'] ?? json['url_campanha']),
+        skinId: _nullable(json['skin_id']),
+        source: _nullable(json['source']),
+        backgroundColor:
+            _nullable(json['background_color'] ?? json['cor_fundo']),
+        backgroundImageUrl: _nullable(
+          json['background_image_url'] ??
+              json['background_url'] ??
+              json['imagem_fundo'],
+        ),
+        borderColor: _nullable(json['border_color'] ?? json['cor_borda']),
+        textColor: _nullable(json['text_color'] ?? json['cor_texto']),
+        accentColor: _nullable(
+          json['accent_color'] ?? json['cor_destaque'] ?? json['primary_color'],
+        ),
+        visualAssets: _stringList(
+          json['visual_assets'] ?? json['asset_candidates'],
+        ),
+        backgroundAssets: _stringList(
+          json['background_assets'] ?? json['wallpaper_assets'],
+        ),
+        products: _list(
+          json['products'] ?? json['produtos'],
+        ).map(StoreProduct.fromJson).toList(),
+      );
 }
 
 class StoreHomeData {

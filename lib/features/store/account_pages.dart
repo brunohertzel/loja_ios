@@ -1,3 +1,5 @@
+import '../../core/localization/localized_widgets.dart';
+import '../../core/localization/locale_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -7,17 +9,19 @@ import '../cart/cart_controller.dart';
 import 'product_detail_page.dart';
 import 'store_models.dart';
 import 'store_repository.dart';
+import 'customer_care_pages.dart';
+import 'address_edit_page.dart';
 
 enum _OrderFilter { all, pending, inProgress, finished, cancelled }
 
 extension on _OrderFilter {
   String get label => switch (this) {
-    _OrderFilter.pending => 'Pendentes',
-    _OrderFilter.inProgress => 'Em andamento',
-    _OrderFilter.finished => 'Finalizados',
-    _OrderFilter.cancelled => 'Cancelados',
-    _ => 'Todos',
-  };
+        _OrderFilter.pending => 'Pendentes',
+        _OrderFilter.inProgress => 'Em andamento',
+        _OrderFilter.finished => 'Finalizados',
+        _OrderFilter.cancelled => 'Cancelados',
+        _ => 'Todos',
+      };
 }
 
 class OrdersPage extends StatefulWidget {
@@ -74,44 +78,42 @@ class _OrdersPageState extends State<OrdersPage> {
     if ({4, 7, 10}.contains(id) ||
         raw.contains('cancel') ||
         raw.contains('recus') ||
-        raw.contains('falha'))
-      return _OrderFilter.cancelled;
+        raw.contains('falha')) return _OrderFilter.cancelled;
     if ({3, 9}.contains(id) ||
         raw.contains('conclu') ||
         raw.contains('fatur') ||
         raw.contains('entregue') ||
-        raw.contains('finaliz'))
-      return _OrderFilter.finished;
+        raw.contains('finaliz')) return _OrderFilter.finished;
     if (id == 1 ||
         raw.contains('pend') ||
         raw.contains('aguard') ||
         raw.contains('novo') ||
-        raw.contains('receb'))
-      return _OrderFilter.pending;
+        raw.contains('receb')) return _OrderFilter.pending;
     return _OrderFilter.inProgress;
   }
 
   List<Map<String, dynamic>> get _visibleOrders {
     final q = _search.text.trim().toLowerCase();
-    return _orders
-        .where((order) {
-          if (_filter != _OrderFilter.all && _group(order) != _filter)
-            return false;
-          if (q.isEmpty) return true;
-          final number = _firstText(order, const [
-            'number',
-            'numero',
-            'order_number',
-            'pedido_numero',
-          ], fallback: '${_orderId(order)}').toLowerCase();
-          final status = _firstText(order, const [
-            'status',
-            'situacao',
-            'status_nome',
-          ]).toLowerCase();
-          return number.contains(q) || status.contains(q);
-        })
-        .toList(growable: false);
+    return _orders.where((order) {
+      if (_filter != _OrderFilter.all && _group(order) != _filter) return false;
+      if (q.isEmpty) return true;
+      final number = _firstText(
+              order,
+              const [
+                'number',
+                'numero',
+                'order_number',
+                'pedido_numero',
+              ],
+              fallback: '${_orderId(order)}')
+          .toLowerCase();
+      final status = _firstText(order, const [
+        'status',
+        'situacao',
+        'status_nome',
+      ]).toLowerCase();
+      return number.contains(q) || status.contains(q);
+    }).toList(growable: false);
   }
 
   Color _statusColor(BuildContext context, Map<String, dynamic> order) {
@@ -137,235 +139,251 @@ class _OrdersPageState extends State<OrdersPage> {
   Widget build(BuildContext context) {
     final visible = _visibleOrders;
     return Scaffold(
-      appBar: AppBar(title: const Text('Meus pedidos')),
+      appBar: AppBar(title: const LText('Meus pedidos')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-          ? _ErrorView(message: _error!, retry: _load)
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  TextField(
-                    controller: _search,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.search),
-                      hintText: 'Buscar pedido ou status',
-                      suffixIcon: _search.text.isEmpty
-                          ? null
-                          : IconButton(
-                              onPressed: () {
-                                _search.clear();
-                                setState(() {});
-                              },
-                              icon: const Icon(Icons.close),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: _OrderFilter.values
-                          .map(
-                            (filter) => Padding(
-                              padding: const EdgeInsets.only(right: 7),
-                              child: ChoiceChip(
-                                selected: _filter == filter,
-                                onSelected: (_) =>
-                                    setState(() => _filter = filter),
-                                label: Text(
-                                  '${filter.label} (${_count(filter)})',
+              ? _ErrorView(message: _error!, retry: _load)
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      TextField(
+                        controller: _search,
+                        onChanged: (_) => setState(() {}),
+                        decoration: LDecoration(
+                          prefixIcon: const Icon(Icons.search),
+                          hintText: 'Buscar pedido ou status',
+                          suffixIcon: _search.text.isEmpty
+                              ? null
+                              : IconButton(
+                                  onPressed: () {
+                                    _search.clear();
+                                    setState(() {});
+                                  },
+                                  icon: const Icon(Icons.close),
                                 ),
-                              ),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  if (_orders.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 70),
-                      child: Center(
-                        child: Text('Você ainda não possui pedidos.'),
+                        ),
                       ),
-                    )
-                  else if (visible.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 50),
-                      child: Center(child: Text('Nenhum pedido neste filtro.')),
-                    )
-                  else
-                    ...visible.map((order) {
-                      final orderId = _orderId(order);
-                      final number = _firstText(order, const [
-                        'number',
-                        'numero',
-                        'order_number',
-                        'pedido_numero',
-                      ], fallback: orderId > 0 ? '$orderId' : '');
-                      final status = _firstText(order, const [
-                        'status',
-                        'situacao',
-                        'status_nome',
-                      ], fallback: 'Pedido recebido');
-                      final paymentStatus = _firstText(order, const [
-                        'payment_status',
-                        'status_pagamento',
-                        'situacao_financeira',
-                      ]);
-                      final paymentMethod = _paymentMethodSummary(order);
-                      final color = _statusColor(context, order);
-                      final onColor = color.computeLuminance() > .50
-                          ? Colors.black
-                          : Colors.white;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Card(
-                          margin: EdgeInsets.zero,
-                          clipBehavior: Clip.antiAlias,
-                          child: InkWell(
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => OrderDetailPage(
-                                  repository: widget.repository,
-                                  cart: widget.cart,
-                                  orderId: orderId,
-                                  initialOrder: order,
-                                ),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(width: 6, height: 120, color: color),
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(13),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                'Pedido #$number',
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.w900,
-                                                  fontSize: 16,
-                                                ),
-                                              ),
-                                            ),
-                                            Text(
-                                              _money(
-                                                numberValue(
-                                                  order['total'] ??
-                                                      order['valor_total'] ??
-                                                      order['amount'],
-                                                ),
-                                              ),
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w900,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 7),
-                                        Wrap(
-                                          spacing: 7,
-                                          runSpacing: 5,
-                                          crossAxisAlignment:
-                                              WrapCrossAlignment.center,
-                                          children: [
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 9,
-                                                    vertical: 4,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color: color,
-                                                borderRadius:
-                                                    BorderRadius.circular(99),
-                                              ),
-                                              child: Text(
-                                                status,
-                                                style: TextStyle(
-                                                  color: onColor,
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w800,
-                                                ),
-                                              ),
-                                            ),
-                                            if (paymentMethod.isNotEmpty)
-                                              Text(
-                                                paymentMethod,
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                                ),
-                                              ),
-                                            if (paymentStatus.isNotEmpty)
-                                              Text(
-                                                ' · ${_friendlyPaymentStatus(paymentStatus)}',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 7),
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              Icons.schedule,
-                                              size: 15,
-                                              color: Theme.of(
-                                                context,
-                                              ).colorScheme.onSurfaceVariant,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Expanded(
-                                              child: Text(
-                                                _formatDate(
-                                                  order['created_at'] ??
-                                                      order['data_criacao'] ??
-                                                      order['data'] ??
-                                                      order['emissao'],
-                                                ),
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                                ),
-                                              ),
-                                            ),
-                                            const Icon(Icons.chevron_right),
-                                          ],
-                                        ),
-                                      ],
+                      const SizedBox(height: 10),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: _OrderFilter.values
+                              .map(
+                                (filter) => Padding(
+                                  padding: const EdgeInsets.only(right: 7),
+                                  child: ChoiceChip(
+                                    selected: _filter == filter,
+                                    onSelected: (_) =>
+                                        setState(() => _filter = filter),
+                                    label: LText(
+                                      '${filter.label} (${_count(filter)})',
                                     ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
+                              )
+                              .toList(),
                         ),
-                      );
-                    }),
-                ],
-              ),
-            ),
+                      ),
+                      const SizedBox(height: 14),
+                      if (_orders.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 70),
+                          child: Center(
+                            child: LText('Você ainda não possui pedidos.'),
+                          ),
+                        )
+                      else if (visible.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 50),
+                          child: Center(
+                              child: LText('Nenhum pedido neste filtro.')),
+                        )
+                      else
+                        ...visible.map((order) {
+                          final orderId = _orderId(order);
+                          final number = _firstText(
+                              order,
+                              const [
+                                'number',
+                                'numero',
+                                'order_number',
+                                'pedido_numero',
+                              ],
+                              fallback: orderId > 0 ? '$orderId' : '');
+                          final status = _firstText(
+                              order,
+                              const [
+                                'status',
+                                'situacao',
+                                'status_nome',
+                              ],
+                              fallback: 'Pedido recebido');
+                          final paymentStatus = _firstText(order, const [
+                            'payment_status',
+                            'status_pagamento',
+                            'situacao_financeira',
+                          ]);
+                          final paymentMethod = _paymentMethodSummary(order);
+                          final color = _statusColor(context, order);
+                          final onColor = color.computeLuminance() > .50
+                              ? Colors.black
+                              : Colors.white;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Card(
+                              margin: EdgeInsets.zero,
+                              clipBehavior: Clip.antiAlias,
+                              child: InkWell(
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => OrderDetailPage(
+                                      repository: widget.repository,
+                                      cart: widget.cart,
+                                      orderId: orderId,
+                                      initialOrder: order,
+                                    ),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                        width: 6, height: 120, color: color),
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(13),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: LText(
+                                                    'Pedido #$number',
+                                                    style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w900,
+                                                      fontSize: 16,
+                                                    ),
+                                                  ),
+                                                ),
+                                                LText(
+                                                  _money(
+                                                    numberValue(
+                                                      order['total'] ??
+                                                          order[
+                                                              'valor_total'] ??
+                                                          order['amount'],
+                                                    ),
+                                                  ),
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 7),
+                                            Wrap(
+                                              spacing: 7,
+                                              runSpacing: 5,
+                                              crossAxisAlignment:
+                                                  WrapCrossAlignment.center,
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 9,
+                                                    vertical: 4,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: color,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            99),
+                                                  ),
+                                                  child: LText(
+                                                    status,
+                                                    style: TextStyle(
+                                                      color: onColor,
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (paymentMethod.isNotEmpty)
+                                                  LText(
+                                                    paymentMethod,
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .onSurfaceVariant,
+                                                    ),
+                                                  ),
+                                                if (paymentStatus.isNotEmpty)
+                                                  LText(
+                                                    ' · ${_friendlyPaymentStatus(paymentStatus)}',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .onSurfaceVariant,
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 7),
+                                            Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.schedule,
+                                                  size: 15,
+                                                  color: Theme.of(
+                                                    context,
+                                                  )
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Expanded(
+                                                  child: LText(
+                                                    _formatDate(
+                                                      order['created_at'] ??
+                                                          order[
+                                                              'data_criacao'] ??
+                                                          order['data'] ??
+                                                          order['emissao'],
+                                                    ),
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .onSurfaceVariant,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const Icon(Icons.chevron_right),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                    ],
+                  ),
+                ),
     );
   }
 }
@@ -439,13 +457,13 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       if (mounted)
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Link inválido.')));
+        ).showSnackBar(const SnackBar(content: LText('Link inválido.')));
       return;
     }
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Não foi possível abrir o link.')),
+        const SnackBar(content: LText('Não foi possível abrir o link.')),
       );
     }
   }
@@ -456,7 +474,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     if (items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Este pedido não possui itens para repetir.'),
+          content: LText('Este pedido não possui itens para repetir.'),
         ),
       );
       return;
@@ -465,20 +483,20 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Repetir pedido'),
-        content: const Text(
+        title: const LText('Repetir pedido'),
+        content: const LText(
           'Os produtos serão consultados novamente com preço e disponibilidade atuais. '
           'O carrinho atual será substituído pelos itens que ainda puderem ser comprados.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancelar'),
+            child: const LText('Cancelar'),
           ),
           FilledButton.icon(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             icon: const Icon(Icons.replay),
-            label: const Text('Repetir pedido'),
+            label: const LText('Repetir pedido'),
           ),
         ],
       ),
@@ -496,12 +514,15 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
         'item_id',
         'id',
       ]);
-      final itemName = _firstText(item, const [
-        'name',
-        'product_name',
-        'nome',
-        'descricao',
-      ], fallback: 'Produto');
+      final itemName = _firstText(
+          item,
+          const [
+            'name',
+            'product_name',
+            'nome',
+            'descricao',
+          ],
+          fallback: 'Produto');
       if (productId.isEmpty) {
         skipped.add('$itemName: produto sem identificação.');
         continue;
@@ -540,9 +561,8 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
             (o) => selectedIds.contains(o.id),
           );
           if (hasSelected) continue;
-          final defaults = block.options
-              .where((o) => o.isDefault)
-              .toList(growable: false);
+          final defaults =
+              block.options.where((o) => o.isDefault).toList(growable: false);
           if (block.type == 'checkbox') {
             selectedIds.addAll(defaults.map((e) => e.id));
           } else if (defaults.isNotEmpty) {
@@ -619,8 +639,8 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Não foi possível repetir'),
-          content: Text(
+          title: const LText('Não foi possível repetir'),
+          content: LText(
             skipped.isEmpty
                 ? 'Nenhum item pôde ser adicionado.'
                 : skipped.join('\n'),
@@ -628,7 +648,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Fechar'),
+              child: const LText('Fechar'),
             ),
           ],
         ),
@@ -655,8 +675,8 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Pedido colocado no carrinho'),
-        content: Text(
+        title: const LText('Pedido colocado no carrinho'),
+        content: LText(
           skipped.isEmpty
               ? '${prepared.length} item(ns) foram adicionados com os dados atuais.'
               : '${prepared.length} item(ns) foram adicionados.\n\nNão adicionados:\n${skipped.join('\n')}',
@@ -664,7 +684,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('OK'),
+            child: const LText('OK'),
           ),
         ],
       ),
@@ -675,12 +695,12 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   Widget build(BuildContext context) {
     if (_loading && _order.isEmpty)
       return Scaffold(
-        appBar: AppBar(title: const Text('Pedido')),
+        appBar: AppBar(title: const LText('Pedido')),
         body: const Center(child: CircularProgressIndicator()),
       );
     if (_error != null && _order.isEmpty)
       return Scaffold(
-        appBar: AppBar(title: const Text('Pedido')),
+        appBar: AppBar(title: const LText('Pedido')),
         body: _ErrorView(message: _error!, retry: _load),
       );
     final items = _orderItems(_order);
@@ -751,26 +771,27 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       'numero_nf',
       'nf_numero',
     ]);
-    final number = _firstText(_order, const [
-      'number',
-      'numero',
-      'order_number',
-      'pedido_numero',
-    ], fallback: widget.orderId > 0 ? '${widget.orderId}' : '');
-    final statusColor =
-        AppTheme.parseColor(
+    final number = _firstText(
+        _order,
+        const [
+          'number',
+          'numero',
+          'order_number',
+          'pedido_numero',
+        ],
+        fallback: widget.orderId > 0 ? '${widget.orderId}' : '');
+    final statusColor = AppTheme.parseColor(
           _firstText(_order, const ['status_color', 'cor_status']),
         ) ??
         Theme.of(context).colorScheme.primary;
-    final statusTextColor = statusColor.computeLuminance() > .50
-        ? Colors.black
-        : Colors.white;
+    final statusTextColor =
+        statusColor.computeLuminance() > .50 ? Colors.black : Colors.white;
     return Scaffold(
       appBar: AppBar(
-        title: Text('Pedido #$number'),
+        title: LText('Pedido #$number'),
         actions: [
           IconButton(
-            tooltip: 'Repetir pedido',
+            tooltip: tr('Repetir pedido'),
             onPressed: _repeating ? null : _repeatOrder,
             icon: _repeating
                 ? const SizedBox(
@@ -813,12 +834,15 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                         color: statusColor,
                         borderRadius: BorderRadius.circular(99),
                       ),
-                      child: Text(
-                        _firstText(_order, const [
-                          'status',
-                          'situacao',
-                          'status_nome',
-                        ], fallback: 'Pedido recebido'),
+                      child: LText(
+                        _firstText(
+                            _order,
+                            const [
+                              'status',
+                              'situacao',
+                              'status_nome',
+                            ],
+                            fallback: 'Pedido recebido'),
                         style: TextStyle(
                           color: statusTextColor,
                           fontWeight: FontWeight.w900,
@@ -826,7 +850,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Text(
+                    LText(
                       'Realizado em ${_formatDate(_order['created_at'] ?? _order['data_criacao'] ?? _order['data'] ?? _order['emissao'])}',
                     ),
                     if (_firstText(_order, const [
@@ -834,18 +858,26 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                       'data_agendada',
                       'agendamento',
                     ]).isNotEmpty)
-                      Text(
-                        'Previsão: ${_formatDate(_firstText(_order, const ['scheduled_at', 'data_agendada', 'agendamento']))}',
+                      LText(
+                        'Previsão: ${_formatDate(_firstText(_order, const [
+                              'scheduled_at',
+                              'data_agendada',
+                              'agendamento'
+                            ]))}',
                       ),
                     if (paymentMethod.isNotEmpty)
-                      Text('Pago com: $paymentMethod'),
+                      LText('Pago com: $paymentMethod'),
                     if (_firstText(_order, const [
                       'payment_status',
                       'status_pagamento',
                       'situacao_financeira',
                     ]).isNotEmpty)
-                      Text(
-                        'Situação financeira: ${_friendlyPaymentStatus(_firstText(_order, const ['payment_status', 'status_pagamento', 'situacao_financeira']))}',
+                      LText(
+                        'Situação financeira: ${_friendlyPaymentStatus(_firstText(_order, const [
+                              'payment_status',
+                              'status_pagamento',
+                              'situacao_financeira'
+                            ]))}',
                       ),
                     const SizedBox(height: 10),
                     SizedBox(
@@ -853,7 +885,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                       child: OutlinedButton.icon(
                         onPressed: _repeating ? null : _repeatOrder,
                         icon: const Icon(Icons.replay),
-                        label: const Text('Repetir pedido'),
+                        label: const LText('Repetir pedido'),
                       ),
                     ),
                   ],
@@ -861,18 +893,35 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
               ),
             ),
             const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: widget.orderId <= 0
+                  ? null
+                  : () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => OrderIssuePage(
+                            repository: widget.repository,
+                            orderId: widget.orderId,
+                          ),
+                        ),
+                      ),
+              icon: const Icon(Icons.support_agent),
+              label: const LText('Informar problema / Abrir disputa'),
+            ),
+            const SizedBox(height: 10),
             _TrackingCard(
-              status: _firstText(_order, const [
-                'status',
-                'situacao',
-                'status_nome',
-              ], fallback: 'Pedido recebido'),
+              status: _firstText(
+                  _order,
+                  const [
+                    'status',
+                    'situacao',
+                    'status_nome',
+                  ],
+                  fallback: 'Pedido recebido'),
               code: trackingCode,
               url: trackingUrl,
               events: trackingEvents,
-              onOpenUrl: trackingUrl.isEmpty
-                  ? null
-                  : () => _openExternal(trackingUrl),
+              onOpenUrl:
+                  trackingUrl.isEmpty ? null : () => _openExternal(trackingUrl),
             ),
             const SizedBox(height: 10),
             Card(
@@ -881,7 +930,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    const LText(
                       'Detalhes do pedido',
                       style: TextStyle(
                         fontWeight: FontWeight.w900,
@@ -913,7 +962,10 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                       ),
                     if (delivery.isNotEmpty &&
                         _orderAddressLine(delivery).isNotEmpty)
-                      _DetailTextLine('Endereço', _orderAddressLine(delivery)),
+                      _DetailTextLine(
+                        'Endereço de entrega',
+                        _orderAddressLine(delivery),
+                      ),
                     if (coupon.isNotEmpty) _DetailTextLine('Cupom', coupon),
                     if (notes.isNotEmpty) _DetailTextLine('Observações', notes),
                     if (erpNumber.isNotEmpty)
@@ -929,7 +981,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                         erpNumber.isEmpty &&
                         invoiceNumber.isEmpty &&
                         origin.isEmpty)
-                      Text(
+                      LText(
                         'Nenhum detalhe adicional foi retornado pela API.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
@@ -944,7 +996,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    const LText(
                       'Itens',
                       style: TextStyle(
                         fontWeight: FontWeight.w900,
@@ -955,7 +1007,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                     if (items.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Text(
+                        child: LText(
                           'A API não retornou os itens deste pedido. Puxe a tela para baixo para tentar novamente.',
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.error,
@@ -973,18 +1025,21 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    _firstText(item, const [
-                                      'name',
-                                      'nome',
-                                      'product_name',
-                                      'descricao',
-                                    ], fallback: 'Produto'),
+                                  LText(
+                                    _firstText(
+                                        item,
+                                        const [
+                                          'name',
+                                          'nome',
+                                          'product_name',
+                                          'descricao',
+                                        ],
+                                        fallback: 'Produto'),
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
-                                  Text(
+                                  LText(
                                     '${formatQuantity(numberValue(item['quantity'] ?? item['quantidade'] ?? item['quantity_real']), 3)} × ${_money(numberValue(item['unit_price'] ?? item['preco_unitario'] ?? item['valor_unitario'] ?? item['price']))}',
                                   ),
                                   if (_firstText(item, const [
@@ -993,7 +1048,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                                     'observation_summary',
                                     'observacao',
                                   ]).isNotEmpty)
-                                    Text(
+                                    LText(
                                       _firstText(item, const [
                                         'complement',
                                         'complemento',
@@ -1010,7 +1065,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                                 ],
                               ),
                             ),
-                            Text(
+                            LText(
                               _money(
                                 numberValue(
                                   item['total'] ??
@@ -1083,7 +1138,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
+                      const LText(
                         'Como foi pago',
                         style: TextStyle(
                           fontWeight: FontWeight.w900,
@@ -1096,7 +1151,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                           (entry) => _PaymentEntryView(entry: entry),
                         )
                       else if (paymentMethod.isNotEmpty)
-                        Text(
+                        LText(
                           paymentMethod,
                           style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
@@ -1106,13 +1161,17 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                         'situacao_financeira',
                       ]).isNotEmpty) ...[
                         const SizedBox(height: 6),
-                        Text(
-                          'Situação: ${_friendlyPaymentStatus(_firstText(_order, const ['payment_status', 'status_pagamento', 'situacao_financeira']))}',
+                        LText(
+                          'Situação: ${_friendlyPaymentStatus(_firstText(_order, const [
+                                'payment_status',
+                                'status_pagamento',
+                                'situacao_financeira'
+                              ]))}',
                         ),
                       ],
                       if (pix.isNotEmpty) ...[
                         const Divider(height: 24),
-                        const Text(
+                        const LText(
                           'PIX copia e cola',
                           style: TextStyle(fontWeight: FontWeight.w800),
                         ),
@@ -1123,12 +1182,12 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                           onPressed: () =>
                               _copy(context, pix, 'Código PIX copiado.'),
                           icon: const Icon(Icons.copy),
-                          label: const Text('Copiar PIX'),
+                          label: const LText('Copiar PIX'),
                         ),
                       ],
                       if (boleto.isNotEmpty) ...[
                         const Divider(height: 24),
-                        const Text(
+                        const LText(
                           'Código do boleto',
                           style: TextStyle(fontWeight: FontWeight.w800),
                         ),
@@ -1142,7 +1201,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                             'Código do boleto copiado.',
                           ),
                           icon: const Icon(Icons.copy),
-                          label: const Text('Copiar código'),
+                          label: const LText('Copiar código'),
                         ),
                       ],
                       if (boletoUrl.isNotEmpty) ...[
@@ -1150,7 +1209,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                         OutlinedButton.icon(
                           onPressed: () => _openExternal(boletoUrl),
                           icon: const Icon(Icons.open_in_new),
-                          label: const Text('Abrir boleto'),
+                          label: const LText('Abrir boleto'),
                         ),
                       ],
                     ],
@@ -1207,7 +1266,7 @@ class _PaymentEntryView extends StatelessWidget {
     final brand = _firstText(entry, const ['brand', 'card_brand', 'bandeira']);
     final installments =
         int.tryParse(_firstText(entry, const ['installments', 'parcelas'])) ??
-        0;
+            0;
     final amount = numberValue(
       entry['amount'] ?? entry['value'] ?? entry['valor'],
     );
@@ -1230,12 +1289,12 @@ class _PaymentEntryView extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                LText(
                   method.isEmpty ? 'Pagamento' : method,
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 if (details.isNotEmpty)
-                  Text(
+                  LText(
                     details.join(' · '),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
@@ -1243,7 +1302,7 @@ class _PaymentEntryView extends StatelessWidget {
             ),
           ),
           if (amount > 0)
-            Text(
+            LText(
               _money(amount),
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
@@ -1269,90 +1328,96 @@ class _TrackingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Row(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(Icons.local_shipping_outlined),
-              SizedBox(width: 8),
-              Text(
-                'Rastreio do pedido',
-                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+              const Row(
+                children: [
+                  Icon(Icons.local_shipping_outlined),
+                  SizedBox(width: 8),
+                  LText(
+                    'Rastreio do pedido',
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 9),
-          Text(status, style: const TextStyle(fontWeight: FontWeight.w800)),
-          if (code.isNotEmpty) ...[
-            const SizedBox(height: 5),
-            Row(
-              children: [
-                Expanded(child: SelectableText('Código: $code')),
-                IconButton(
-                  tooltip: 'Copiar código',
-                  onPressed: () =>
-                      _copy(context, code, 'Código de rastreio copiado.'),
-                  icon: const Icon(Icons.copy, size: 19),
-                ),
-              ],
-            ),
-          ],
-          if (events.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            ...events.take(6).map((event) {
-              final title = _firstText(event, const [
-                'title',
-                'status',
-                'description',
-                'descricao',
-              ], fallback: 'Atualização');
-              final date = _firstText(event, const [
-                'created_at',
-                'date',
-                'data',
-                'datetime',
-              ]);
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 9),
+              LText(status,
+                  style: const TextStyle(fontWeight: FontWeight.w800)),
+              if (code.isNotEmpty) ...[
+                const SizedBox(height: 5),
+                Row(
                   children: [
-                    const Padding(
-                      padding: EdgeInsets.only(top: 5),
-                      child: Icon(Icons.circle, size: 8),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        date.isEmpty ? title : '$title\n${_formatDate(date)}',
-                      ),
+                    Expanded(child: SelectableText(tr('Código: $code'))),
+                    IconButton(
+                      tooltip: tr('Copiar código'),
+                      onPressed: () =>
+                          _copy(context, code, 'Código de rastreio copiado.'),
+                      icon: const Icon(Icons.copy, size: 19),
                     ),
                   ],
                 ),
-              );
-            }),
-          ] else ...[
-            const SizedBox(height: 5),
-            Text(
-              'Puxe a tela para baixo para atualizar o andamento. Quando houver código ou link da transportadora, ele aparece aqui.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-          if (onOpenUrl != null) ...[
-            const SizedBox(height: 10),
-            FilledButton.icon(
-              onPressed: onOpenUrl,
-              icon: const Icon(Icons.open_in_new),
-              label: const Text('Acompanhar rastreio'),
-            ),
-          ],
-        ],
-      ),
-    ),
-  );
+              ],
+              if (events.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                ...events.take(6).map((event) {
+                  final title = _firstText(
+                      event,
+                      const [
+                        'title',
+                        'status',
+                        'description',
+                        'descricao',
+                      ],
+                      fallback: 'Atualização');
+                  final date = _firstText(event, const [
+                    'created_at',
+                    'date',
+                    'data',
+                    'datetime',
+                  ]);
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(top: 5),
+                          child: Icon(Icons.circle, size: 8),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: LText(
+                            date.isEmpty
+                                ? title
+                                : '$title\n${_formatDate(date)}',
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ] else ...[
+                const SizedBox(height: 5),
+                LText(
+                  'Puxe a tela para baixo para atualizar o andamento. Quando houver código ou link da transportadora, ele aparece aqui.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+              if (onOpenUrl != null) ...[
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  onPressed: onOpenUrl,
+                  icon: const Icon(Icons.open_in_new),
+                  label: const LText('Acompanhar rastreio'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
 }
 
 class FavoritesPage extends StatefulWidget {
@@ -1395,63 +1460,67 @@ class _FavoritesPageState extends State<FavoritesPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Favoritos')),
-    body: _loading
-        ? const Center(child: CircularProgressIndicator())
-        : _error != null
-        ? _ErrorView(message: _error!, retry: _load)
-        : _products.isEmpty
-        ? const _EmptyView(
-            icon: Icons.favorite_border,
-            text: 'Nenhum produto favorito.',
-          )
-        : RefreshIndicator(
-            onRefresh: _load,
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: _products.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (_, i) {
-                final p = _products[i];
-                return Card(
-                  child: ListTile(
-                    leading: SizedBox(
-                      width: 54,
-                      height: 54,
-                      child: p.imageUrl == null
-                          ? const Icon(Icons.image_outlined)
-                          : Image.network(
-                              widget.repository.api.resolvePublicUrl(
-                                    p.imageUrl,
-                                  ) ??
-                                  p.imageUrl!,
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => const Icon(
-                                Icons.image_not_supported_outlined,
+        appBar: AppBar(title: const LText('Favoritos')),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+                ? _ErrorView(message: _error!, retry: _load)
+                : _products.isEmpty
+                    ? const _EmptyView(
+                        icon: Icons.favorite_border,
+                        text: 'Nenhum produto favorito.',
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _load,
+                        child: ListView.separated(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _products.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 8),
+                          itemBuilder: (_, i) {
+                            final p = _products[i];
+                            return Card(
+                              child: ListTile(
+                                leading: SizedBox(
+                                  width: 54,
+                                  height: 54,
+                                  child: p.imageUrl == null
+                                      ? const Icon(Icons.image_outlined)
+                                      : Image.network(
+                                          widget.repository.api
+                                                  .resolvePublicUrl(
+                                                p.imageUrl,
+                                              ) ??
+                                              p.imageUrl!,
+                                          fit: BoxFit.contain,
+                                          errorBuilder: (_, __, ___) =>
+                                              const Icon(
+                                            Icons.image_not_supported_outlined,
+                                          ),
+                                        ),
+                                ),
+                                title: LText(
+                                  p.name,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w800),
+                                ),
+                                subtitle: LText(_money(p.price)),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => ProductDetailPage(
+                                      product: p,
+                                      repository: widget.repository,
+                                      cart: widget.cart,
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                    ),
-                    title: Text(
-                      p.name,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    subtitle: Text(_money(p.price)),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ProductDetailPage(
-                          product: p,
-                          repository: widget.repository,
-                          cart: widget.cart,
+                            );
+                          },
                         ),
                       ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-  );
+      );
 }
 
 class AddressesPage extends StatefulWidget {
@@ -1489,53 +1558,74 @@ class _AddressesPageState extends State<AddressesPage> {
     }
   }
 
+  Future<void> _edit([Map<String, dynamic>? address]) async {
+    final saved = await Navigator.of(context).push<bool>(MaterialPageRoute(
+        builder: (_) =>
+            AddressEditPage(repository: widget.repository, address: address)));
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: LText('Endereço salvo.')));
+      await _load();
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Meus endereços')),
-    body: _loading
-        ? const Center(child: CircularProgressIndicator())
-        : _error != null
-        ? _ErrorView(message: _error!, retry: _load)
-        : _addresses.isEmpty
-        ? const _EmptyView(
-            icon: Icons.location_on_outlined,
-            text: 'Nenhum endereço cadastrado.',
-          )
-        : RefreshIndicator(
-            onRefresh: _load,
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: _addresses.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (_, i) {
-                final address = _addresses[i];
-                return Card(
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.all(14),
-                    leading: Icon(
-                      boolValue(address['is_default'])
-                          ? Icons.home
-                          : Icons.location_on_outlined,
-                    ),
-                    title: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            stringValue(address['label'], fallback: 'Endereço'),
-                            style: const TextStyle(fontWeight: FontWeight.w900),
-                          ),
+        appBar: AppBar(title: const LText('Meus Endereços')),
+        floatingActionButton: FloatingActionButton(
+            tooltip: tr('Adicionar endereço'),
+            onPressed: () => _edit(),
+            child: const Icon(Icons.add)),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+                ? _ErrorView(message: _error!, retry: _load)
+                : _addresses.isEmpty
+                    ? const _EmptyView(
+                        icon: Icons.location_on_outlined,
+                        text: 'Nenhum endereço cadastrado.',
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _load,
+                        child: ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+                          itemCount: _addresses.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 10),
+                          itemBuilder: (_, i) {
+                            final address = _addresses[i];
+                            return Card(
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.all(14),
+                                leading: Icon(
+                                  boolValue(address['is_default'])
+                                      ? Icons.home
+                                      : Icons.location_on_outlined,
+                                ),
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: LText(
+                                        stringValue(address['label'],
+                                            fallback: 'Endereço'),
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w900),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                subtitle: LText(_addressLine(address)),
+                                trailing: IconButton(
+                                    tooltip: tr('Editar endereço'),
+                                    icon: const Icon(Icons.edit_outlined),
+                                    onPressed: () => _edit(address)),
+                                onTap: () => _edit(address),
+                              ),
+                            );
+                          },
                         ),
-                        if (boolValue(address['is_default']))
-                          const Chip(label: Text('Padrão')),
-                      ],
-                    ),
-                    subtitle: Text(_addressLine(address)),
-                  ),
-                );
-              },
-            ),
-          ),
-  );
+                      ),
+      );
 }
 
 class _InlineWarningCard extends StatelessWidget {
@@ -1545,35 +1635,35 @@ class _InlineWarningCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
-    color: Theme.of(context).colorScheme.errorContainer,
-    child: Padding(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Icons.info_outline,
-            color: Theme.of(context).colorScheme.onErrorContainer,
-          ),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Text(
-              message,
-              style: TextStyle(
+        color: Theme.of(context).colorScheme.errorContainer,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.info_outline,
                 color: Theme.of(context).colorScheme.onErrorContainer,
               ),
-            ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: LText(
+                  message,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  onRetry();
+                },
+                child: const LText('Atualizar'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () {
-              onRetry();
-            },
-            child: const Text('Atualizar'),
-          ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }
 
 class _DetailTextLine extends StatelessWidget {
@@ -1583,22 +1673,22 @@ class _DetailTextLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 3),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 105,
-          child: Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 105,
+              child: LText(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: LText(value)),
+          ],
         ),
-        const SizedBox(width: 8),
-        Expanded(child: Text(value)),
-      ],
-    ),
-  );
+      );
 }
 
 class _SummaryLine extends StatelessWidget {
@@ -1608,24 +1698,26 @@ class _SummaryLine extends StatelessWidget {
   final bool strong;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 4),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: strong ? const TextStyle(fontWeight: FontWeight.w900) : null,
-          ),
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Expanded(
+              child: LText(
+                label,
+                style: strong
+                    ? const TextStyle(fontWeight: FontWeight.w900)
+                    : null,
+              ),
+            ),
+            LText(
+              _money(value),
+              style: strong
+                  ? const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)
+                  : const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ],
         ),
-        Text(
-          _money(value),
-          style: strong
-              ? const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)
-              : const TextStyle(fontWeight: FontWeight.w700),
-        ),
-      ],
-    ),
-  );
+      );
 }
 
 class _ErrorView extends StatelessWidget {
@@ -1634,26 +1726,26 @@ class _ErrorView extends StatelessWidget {
   final Future<void> Function() retry;
   @override
   Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.error_outline, size: 48),
-          const SizedBox(height: 10),
-          Text(message, textAlign: TextAlign.center),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: () {
-              retry();
-            },
-            icon: const Icon(Icons.refresh),
-            label: const Text('Tentar novamente'),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 48),
+              const SizedBox(height: 10),
+              LText(message, textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () {
+                  retry();
+                },
+                icon: const Icon(Icons.refresh),
+                label: const LText('Tentar novamente'),
+              ),
+            ],
           ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }
 
 class _EmptyView extends StatelessWidget {
@@ -1662,22 +1754,22 @@ class _EmptyView extends StatelessWidget {
   final String text;
   @override
   Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 54,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 54,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(height: 12),
+              LText(text, textAlign: TextAlign.center),
+            ],
           ),
-          const SizedBox(height: 12),
-          Text(text, textAlign: TextAlign.center),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }
 
 String _firstText(
@@ -1750,6 +1842,8 @@ String _orderAddressLine(Map<String, dynamic> address) {
   if (complement.isNotEmpty) parts.add(complement);
   if (district.isNotEmpty) parts.add(district);
   if (city.isNotEmpty) parts.add(state.isEmpty ? city : '$city/$state');
+  final zip = _firstText(address, const ['zip', 'cep']);
+  if (zip.isNotEmpty) parts.add('CEP $zip');
   return parts.join(' - ');
 }
 
@@ -1809,8 +1903,7 @@ Map<String, dynamic> _trackingData(Map<String, dynamic> order) {
       'rastreio_url',
       'tracking_link',
     ]),
-    'events':
-        order['tracking_events'] ??
+    'events': order['tracking_events'] ??
         order['timeline'] ??
         order['history'] ??
         order['historico'],
@@ -1909,17 +2002,20 @@ List<Map<String, dynamic>> _paymentEntriesShallow(
 
 void _copy(BuildContext context, String value, String message) {
   Clipboard.setData(ClipboardData(text: value));
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: LText(message)));
 }
 
-String _addressLine(Map<String, dynamic> a) {
-  final street = stringValue(a['street']);
-  final number = stringValue(a['number']);
-  final district = stringValue(a['district']);
-  final city = stringValue(a['city']);
-  final state = stringValue(a['state']);
-  return '$street${number.isEmpty ? '' : ', $number'}${district.isEmpty ? '' : ' - $district'}${city.isEmpty ? '' : ' - $city/$state'}';
-}
+String _addressLine(Map<String, dynamic> a) => [
+      [stringValue(a['street']), stringValue(a['number'])]
+          .where((v) => v.isNotEmpty)
+          .join(', '),
+      stringValue(a['complement']),
+      stringValue(a['district']),
+      [stringValue(a['city']), stringValue(a['state'])]
+          .where((v) => v.isNotEmpty)
+          .join('/'),
+      stringValue(a['zip']).isEmpty ? '' : 'CEP ${stringValue(a['zip'])}',
+    ].where((v) => v.isNotEmpty).join(' - ');
 
 String _formatDate(dynamic raw) {
   final text = stringValue(raw);
