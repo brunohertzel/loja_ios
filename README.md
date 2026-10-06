@@ -1,14 +1,18 @@
+# Versão atual: 1.6.28 (186) — produção
+
+Leia `README_IOS_PRODUCAO.md` para a geração de release. As instruções históricas abaixo se referem às versões anteriores.
+
 
 ## 1.3.1
 - Checkout renova access token automaticamente ao expirar, usando o refresh token.
 - App sempre inicia na Home da loja.
 - Opções de corte/tempero/embalagem e quantidade foram movidas para antes da ficha técnica.
 - Identidade visual continua vindo do bootstrap do módulo Mobile.
-# Soft Ecommerce Mobile — Loja Android 1.6.19
+# Soft Ecommerce Mobile — Loja Android 1.6.18
 
 Aplicativo Android da **loja para o cliente final**. O painel administrativo continua no ecommerce web.
 
-## Fluxo comercial de release — 1.6.19
+## Fluxo comercial de release — 1.6.18
 
 A identidade do cliente **nao fica fixa no source**. Antes de cada compilacao comercial, sincronize o cliente pela URL da API Mobile:
 
@@ -25,6 +29,17 @@ O `--dart-define=SOFT_API_BASE_URL` continua aceito e tem precedencia para a URL
 
 
 ## Implementado nesta versão
+
+### Ajustes 1.6.18
+
+- Após adicionar um produto vindo da busca, a pesquisa é limpa e o app retorna para a Loja.
+- A Loja permite escolher cards/fotos em tamanho Grande, Médio ou Pequeno, preservando descrição, preço, badges e ação de carrinho.
+- A galeria do produto mantém todas as imagens e inclui o `video_url` como item do carrossel.
+- Ao abrir uma sugestão, o app pergunta se deve adicionar o produto atual antes de continuar quando ele ainda não estiver no carrinho.
+- Meus Pedidos passa a permitir repetir o pedido, consultando preço/disponibilidade atuais e reconstruindo o carrinho com os itens válidos.
+- O detalhe do pedido exibe rastreio/andamento e abre link externo quando o backend enviar URL de rastreamento.
+- O histórico/detalhe exibe a forma de pagamento, inclusive múltiplos meios, bandeira, parcelas, provedor e situação quando disponíveis na API.
+- Não há nova dependência Flutter e o gerador de pacotes permanece inalterado.
 
 - identidade visual recebida do módulo Mobile/loja: cor primária, secundária, logo, ícone Android e splash;
 - Home com carrossel automático de banners, ofertas, busca e produtos; categorias ficam somente na aba própria da barra inferior;
@@ -140,5 +155,3 @@ Para o ambiente de teste desta entrega, a API já está localmente definida como
 Não é necessário usar `--dart-define=SOFT_API_BASE_URL=...`.
 
 O bootstrap permanece para regras que realmente são de servidor: licença da plataforma, atualização mínima, meios de pagamento efetivamente disponíveis, produtos, ofertas, favoritos, estoque, campanhas, checkout e demais regras comerciais.
-# loja_ios
-# loja_ios

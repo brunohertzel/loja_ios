@@ -1,13 +1,13 @@
+import '../../core/config/platform_info.dart';
 import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/config/generated_app_config.dart';
-import '../../core/config/platform_info.dart';
 import '../../core/models/bootstrap_config.dart';
 import '../../core/network/api_client.dart';
 import '../../core/storage/secure_session_store.dart';
@@ -20,6 +20,7 @@ import '../auth/login_page.dart';
 import '../cart/cart_controller.dart';
 import '../sofie/sofie_widget.dart';
 import 'account_pages.dart';
+import 'barcode_scanner_page.dart';
 import 'checkout_page.dart';
 import 'product_detail_page.dart';
 import 'store_models.dart';
@@ -50,9 +51,11 @@ class StoreShell extends StatefulWidget {
 class _StoreShellState extends State<StoreShell> {
   late final StoreRepository _repository;
   late final CartController _cart;
-  final GlobalKey<_AccountPageState> _accountKey = GlobalKey<_AccountPageState>();
+  final GlobalKey<_AccountPageState> _accountKey =
+      GlobalKey<_AccountPageState>();
   final GlobalKey<_OffersPageState> _offersKey = GlobalKey<_OffersPageState>();
   int _index = 2;
+  final Set<int> _visitedTabs = {2};
   Timer? _cartSyncDebounce;
   bool _cartInitializing = true;
   bool _applyingServerCart = false;
@@ -127,18 +130,23 @@ class _StoreShellState extends State<StoreShell> {
         repository: _repository,
         cart: _cart,
         sponsoredCampaign: _selectedSponsoredCampaign,
-        onShowAllOffers: () => setState(() => _selectedSponsoredCampaign = null),
+        onShowAllOffers: () =>
+            setState(() => _selectedSponsoredCampaign = null),
       ),
       CategoriesPage(repository: _repository, cart: _cart),
       StoreHomePage(
         repository: _repository,
         cart: _cart,
         bootstrap: widget.bootstrap,
-        onOpenCart: () => setState(() => _index = 3),
+        onOpenCart: () => setState(() {
+          _index = 3;
+          _visitedTabs.add(3);
+        }),
         onOpenSponsoredCampaign: (campaign) {
           setState(() {
             _selectedSponsoredCampaign = campaign;
             _index = 0;
+            _visitedTabs.add(0);
           });
         },
       ),
@@ -168,7 +176,13 @@ class _StoreShellState extends State<StoreShell> {
       builder: (context, _) => Scaffold(
         body: Stack(
           children: [
-            IndexedStack(index: _index, children: pages),
+            IndexedStack(
+              index: _index,
+              children: [
+                for (var i = 0; i < pages.length; i++)
+                  _visitedTabs.contains(i) ? pages[i] : const SizedBox.shrink(),
+              ],
+            ),
             if (widget.bootstrap.sofie.enabled)
               Positioned(
                 left: widget.bootstrap.sofie.onLeft ? 14 : null,
@@ -189,6 +203,7 @@ class _StoreShellState extends State<StoreShell> {
               // Tocar diretamente na aba Ofertas volta para "Todas".
               if (value == 0) _selectedSponsoredCampaign = null;
               _index = value;
+              _visitedTabs.add(value);
             });
             if (value == 0) _offersKey.currentState?.showAllOffers();
             if (value == 3) unawaited(_refreshCartFromServer());
@@ -237,7 +252,7 @@ class _StoreShellState extends State<StoreShell> {
   }
 }
 
-enum _OfferFilterMode { all, sponsored, campaign, offerCampaign }
+enum _OfferFilterMode { all, sponsored, sponsoredCampaign, offerCampaign }
 
 class OffersPage extends StatefulWidget {
   const OffersPage({
@@ -260,19 +275,17 @@ class _OffersPageState extends State<OffersPage> {
   List<StoreProduct> _offers = const [];
   List<StoreSponsoredCampaign> _sponsoredCampaigns = const [];
   _OfferFilterMode _filterMode = _OfferFilterMode.all;
-  StoreSponsoredCampaign? _filterCampaign;
+  StoreSponsoredCampaign? _filterSponsoredCampaign;
   StoreCampaign? _filterOfferCampaign;
   bool _loading = true;
   String? _error;
-
-  bool get _showingSponsored => _filterMode != _OfferFilterMode.all;
 
   @override
   void initState() {
     super.initState();
     if (widget.sponsoredCampaign != null) {
-      _filterMode = _OfferFilterMode.campaign;
-      _filterCampaign = widget.sponsoredCampaign;
+      _filterMode = _OfferFilterMode.sponsoredCampaign;
+      _filterSponsoredCampaign = widget.sponsoredCampaign;
     }
     _load();
   }
@@ -282,12 +295,13 @@ class _OffersPageState extends State<OffersPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.sponsoredCampaign?.id != widget.sponsoredCampaign?.id) {
       setState(() {
+        _filterOfferCampaign = null;
         if (widget.sponsoredCampaign == null) {
           _filterMode = _OfferFilterMode.all;
-          _filterCampaign = null;
+          _filterSponsoredCampaign = null;
         } else {
-          _filterMode = _OfferFilterMode.campaign;
-          _filterCampaign = widget.sponsoredCampaign;
+          _filterMode = _OfferFilterMode.sponsoredCampaign;
+          _filterSponsoredCampaign = widget.sponsoredCampaign;
         }
       });
     }
@@ -297,18 +311,21 @@ class _OffersPageState extends State<OffersPage> {
     if (!mounted) return;
     setState(() {
       _filterMode = _OfferFilterMode.all;
-      _filterCampaign = null;
+      _filterSponsoredCampaign = null;
       _filterOfferCampaign = null;
     });
   }
 
-  void _selectFilter(_OfferFilterMode mode, [StoreSponsoredCampaign? campaign]) {
+  void _selectBaseFilter(
+    _OfferFilterMode mode, [
+    StoreSponsoredCampaign? campaign,
+  ]) {
     setState(() {
       _filterMode = mode;
-      _filterCampaign = mode == _OfferFilterMode.campaign ? campaign : null;
-      if (mode != _OfferFilterMode.offerCampaign) {
-        _filterOfferCampaign = null;
-      }
+      _filterSponsoredCampaign = mode == _OfferFilterMode.sponsoredCampaign
+          ? campaign
+          : null;
+      _filterOfferCampaign = null;
     });
     if (mode == _OfferFilterMode.all) widget.onShowAllOffers();
   }
@@ -316,25 +333,28 @@ class _OffersPageState extends State<OffersPage> {
   void _selectOfferCampaign(StoreCampaign campaign) {
     setState(() {
       _filterMode = _OfferFilterMode.offerCampaign;
-      _filterCampaign = null;
+      _filterSponsoredCampaign = null;
       _filterOfferCampaign = campaign;
     });
+    widget.onShowAllOffers();
   }
 
   Future<void> _load() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final home = await widget.repository.home();
 
       // A aba Ofertas nunca pode ser substituida pela vitrine patrocinada.
-      // O endpoint possui sua lista de ofertas, mas tambem consolidamos os
-      // produtos promocionais presentes na Home para evitar perder ofertas
-      // normais caso uma campanha patrocinada esteja ativa.
+      // Consolida todas as fontes promocionais sem perder as ofertas normais.
       final merged = <String, StoreProduct>{};
 
       void addOffer(StoreProduct product, {bool trustedOffer = false}) {
         if (product.id.trim().isEmpty) return;
-        if (!trustedOffer && !product.hasOffer) return;
+        if (!trustedOffer && !product.hasOffer && product.campaign == null)
+          return;
         merged.putIfAbsent(product.id, () => product);
       }
 
@@ -364,50 +384,55 @@ class _OffersPageState extends State<OffersPage> {
     }
   }
 
+  List<StoreCampaign> get _normalOfferCampaigns {
+    final byId = <int, StoreCampaign>{};
+    for (final product in _offers) {
+      final campaign = product.campaign;
+      if (campaign == null || campaign.id <= 0) continue;
+      byId.putIfAbsent(campaign.id, () => campaign);
+    }
+    final values = byId.values.toList();
+    values.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return values;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final campaign = _filterMode == _OfferFilterMode.campaign
-        ? _filterCampaign
+    final sponsoredCampaign = _filterMode == _OfferFilterMode.sponsoredCampaign
+        ? _filterSponsoredCampaign
+        : null;
+    final offerCampaign = _filterMode == _OfferFilterMode.offerCampaign
+        ? _filterOfferCampaign
         : null;
 
     final sponsoredMerged = <String, StoreProduct>{};
-    for (final sponsoredCampaign in _sponsoredCampaigns) {
-      for (final product in sponsoredCampaign.products) {
+    for (final campaign in _sponsoredCampaigns) {
+      for (final product in campaign.products) {
         if (product.id.trim().isNotEmpty) {
           sponsoredMerged.putIfAbsent(product.id, () => product);
         }
       }
     }
 
-    final normalCampaignsById = <int, StoreCampaign>{};
-    for (final product in _offers) {
-      final c = product.campaign;
-      // Na aba Ofertas, campanhas promocionais comuns continuam agrupadas em
-      // "Todas". Somente datas especiais (1/1, 2/2, 3/3 ... 12/12) ganham
-      // um filtro nominal proprio. Patrocinadas mantem seus filtros separados.
-      if (c != null && c.id > 0 && _isSpecialDateOfferName(c.name)) {
-        normalCampaignsById.putIfAbsent(c.id, () => c);
-      }
-    }
-    final normalCampaigns = normalCampaignsById.values.toList()
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-
     final visibleOffers = switch (_filterMode) {
       _OfferFilterMode.all => _offers,
-      _OfferFilterMode.sponsored => sponsoredMerged.values.toList(growable: false),
-      _OfferFilterMode.campaign => campaign?.products ?? const <StoreProduct>[],
-      _OfferFilterMode.offerCampaign => _offers
-          .where((p) => p.campaign?.id == _filterOfferCampaign?.id)
-          .toList(growable: false),
+      _OfferFilterMode.sponsored => sponsoredMerged.values.toList(
+        growable: false,
+      ),
+      _OfferFilterMode.sponsoredCampaign =>
+        sponsoredCampaign?.products ?? const <StoreProduct>[],
+      _OfferFilterMode.offerCampaign =>
+        _offers
+            .where((p) => p.campaign?.id == offerCampaign?.id)
+            .toList(growable: false),
     };
 
-    final backgroundCandidates = campaign == null
+    final backgroundCandidates = sponsoredCampaign == null
         ? const <String>[]
-        : _sponsoredBackgroundCandidates(campaign);
+        : _sponsoredBackgroundCandidates(sponsoredCampaign);
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Ofertas'),
-      ),
+      appBar: AppBar(title: const Text('Ofertas')),
       body: Stack(
         children: [
           if (backgroundCandidates.isNotEmpty)
@@ -421,84 +446,98 @@ class _OffersPageState extends State<OffersPage> {
           if (backgroundCandidates.isNotEmpty)
             Positioned.fill(
               child: ColoredBox(
-                color: Theme.of(context).scaffoldBackgroundColor.withOpacity(.78),
+                color: Theme.of(
+                  context,
+                ).scaffoldBackgroundColor.withOpacity(.78),
               ),
             ),
           Positioned.fill(
             child: RefreshIndicator(
-          onRefresh: _load,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-            _OffersCampaignFilter(
-              mode: _filterMode,
-              campaign: campaign,
-              campaigns: _sponsoredCampaigns,
-              offerCampaigns: normalCampaigns,
-              selectedOfferCampaign: _filterOfferCampaign,
-              repository: widget.repository,
-              onSelect: _selectFilter,
-              onSelectOfferCampaign: _selectOfferCampaign,
-            ),
-            if (_filterMode == _OfferFilterMode.offerCampaign && _filterOfferCampaign != null) ...[
-              const SizedBox(height: 12),
-              _OfferCampaignStatus(campaign: _filterOfferCampaign!),
-            ],
-            if (_filterMode == _OfferFilterMode.sponsored) ...[
-              const SizedBox(height: 12),
-              Row(
+              onRefresh: _load,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
                 children: [
-                  Icon(Icons.campaign_outlined, color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Ofertas patrocinadas',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                  _OffersCampaignFilter(
+                    mode: _filterMode,
+                    sponsoredCampaign: sponsoredCampaign,
+                    sponsoredCampaigns: _sponsoredCampaigns,
+                    offerCampaign: offerCampaign,
+                    offerCampaigns: _normalOfferCampaigns,
+                    repository: widget.repository,
+                    onSelectBase: _selectBaseFilter,
+                    onSelectOfferCampaign: _selectOfferCampaign,
                   ),
+                  if (_filterMode == _OfferFilterMode.sponsored) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.campaign_outlined,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Ofertas patrocinadas',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (sponsoredCampaign != null) ...[
+                    const SizedBox(height: 12),
+                    _SponsoredOffersHeader(
+                      campaign: sponsoredCampaign,
+                      repository: widget.repository,
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+                  if (offerCampaign != null) ...[
+                    const SizedBox(height: 12),
+                    _NormalOfferCampaignHeader(campaign: offerCampaign),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_loading) const LinearProgressIndicator(),
+                  if (_error != null) ...[
+                    const SizedBox(height: 16),
+                    _ApiMissingCard(message: _error!, onRetry: _load),
+                  ],
+                  if (_filterMode == _OfferFilterMode.sponsoredCampaign &&
+                      sponsoredCampaign != null &&
+                      visibleOffers.isNotEmpty)
+                    _SponsoredProductGrid(
+                      products: visibleOffers,
+                      campaign: sponsoredCampaign,
+                      repository: widget.repository,
+                      cart: widget.cart,
+                    ),
+                  if (_filterMode != _OfferFilterMode.sponsoredCampaign &&
+                      visibleOffers.isNotEmpty)
+                    _ProductGrid(
+                      products: visibleOffers,
+                      repository: widget.repository,
+                      cart: widget.cart,
+                    ),
+                  if (!_loading && _error == null && visibleOffers.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 70),
+                      child: Center(
+                        child: Text(switch (_filterMode) {
+                          _OfferFilterMode.all =>
+                            'Nenhuma oferta ativa neste momento.',
+                          _OfferFilterMode.sponsored =>
+                            'Nenhuma oferta patrocinada ativa neste momento.',
+                          _OfferFilterMode.sponsoredCampaign =>
+                            'Nenhum produto encontrado para esta campanha patrocinada.',
+                          _OfferFilterMode.offerCampaign =>
+                            'Nenhum produto encontrado para esta campanha.',
+                        }, textAlign: TextAlign.center),
+                      ),
+                    ),
                 ],
               ),
-              const SizedBox(height: 12),
-            ],
-            if (campaign != null) ...[
-              const SizedBox(height: 12),
-              _SponsoredOffersHeader(campaign: campaign, repository: widget.repository),
-              const SizedBox(height: 14),
-            ],
-            if (_loading) const LinearProgressIndicator(),
-            if (_error != null) ...[
-              const SizedBox(height: 16),
-              _ApiMissingCard(message: _error!, onRetry: _load),
-            ],
-            if (_filterMode == _OfferFilterMode.campaign && campaign != null && visibleOffers.isNotEmpty)
-              _SponsoredProductGrid(
-                products: visibleOffers,
-                campaign: campaign,
-                repository: widget.repository,
-                cart: widget.cart,
-              ),
-            if (_filterMode != _OfferFilterMode.campaign && visibleOffers.isNotEmpty)
-              _ProductGrid(
-                products: visibleOffers,
-                repository: widget.repository,
-                cart: widget.cart,
-              ),
-            if (!_loading && _error == null && visibleOffers.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 70),
-                child: Center(
-                  child: Text(
-                    switch (_filterMode) {
-                      _OfferFilterMode.all => 'Nenhuma oferta ativa neste momento.',
-                      _OfferFilterMode.sponsored => 'Nenhuma oferta patrocinada ativa neste momento.',
-                      _OfferFilterMode.campaign => 'Nenhum produto encontrado para esta campanha patrocinada.',
-                      _OfferFilterMode.offerCampaign => 'Nenhum produto encontrado para esta oferta.',
-                    },
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+            ),
           ),
         ],
       ),
@@ -506,56 +545,55 @@ class _OffersPageState extends State<OffersPage> {
   }
 }
 
+class _NormalOfferCampaignHeader extends StatelessWidget {
+  const _NormalOfferCampaignHeader({required this.campaign});
 
-bool _isSpecialDateOfferName(String name) {
-  final match = RegExp(r'^(\d{1,2})\s*[/.-]\s*(\d{1,2})(?:\D|$)').firstMatch(name.trim());
-  if (match == null) return false;
-  final left = int.tryParse(match.group(1) ?? '');
-  final right = int.tryParse(match.group(2) ?? '');
-  return left != null && right != null && left == right && left >= 1 && left <= 12;
-}
-
-class _OfferCampaignStatus extends StatelessWidget {
-  const _OfferCampaignStatus({required this.campaign});
   final StoreCampaign campaign;
-
-  String _countdown(int seconds) {
-    if (seconds <= 0) return 'começando agora';
-    final days = seconds ~/ 86400;
-    final hours = (seconds % 86400) ~/ 3600;
-    final minutes = (seconds % 3600) ~/ 60;
-    if (days > 0) return '${days}d ${hours}h';
-    if (hours > 0) return '${hours}h ${minutes}min';
-    return '${minutes.clamp(1, 59)}min';
-  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final upcoming = campaign.isUpcoming;
+    final isSpecial =
+        campaign.kind == 'SPECIAL_DATE' ||
+        RegExp(
+          r'(^|\s)\d{1,2}\s*[./-]\s*\d{1,2}(\s|$)',
+        ).hasMatch(campaign.name);
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: upcoming ? scheme.primaryContainer.withOpacity(.55) : scheme.secondaryContainer.withOpacity(.45),
+        color: scheme.primaryContainer.withOpacity(.55),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: upcoming ? scheme.primary.withOpacity(.30) : scheme.outlineVariant),
+        border: Border.all(color: scheme.primary.withOpacity(.22)),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(upcoming ? Icons.timer_outlined : Icons.local_offer_outlined, color: scheme.primary),
-          const SizedBox(width: 10),
+          CircleAvatar(
+            backgroundColor: scheme.primary,
+            foregroundColor: scheme.onPrimary,
+            child: Icon(
+              isSpecial
+                  ? Icons.calendar_month_outlined
+                  : Icons.local_offer_outlined,
+            ),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(campaign.name, style: const TextStyle(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 3),
                 Text(
-                  upcoming
-                      ? 'Começa em ${_countdown(campaign.secondsToStart)}${campaign.hidePrices ? ' · preços liberados na abertura' : ''}'
-                      : 'Oferta ativa agora',
-                  style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700),
+                  isSpecial ? 'Data promocional' : 'Campanha',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: scheme.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  campaign.name,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ],
             ),
@@ -569,22 +607,23 @@ class _OfferCampaignStatus extends StatelessWidget {
 class _OffersCampaignFilter extends StatelessWidget {
   const _OffersCampaignFilter({
     required this.mode,
-    required this.campaign,
-    required this.campaigns,
+    required this.sponsoredCampaign,
+    required this.sponsoredCampaigns,
+    required this.offerCampaign,
     required this.offerCampaigns,
-    required this.selectedOfferCampaign,
     required this.repository,
-    required this.onSelect,
+    required this.onSelectBase,
     required this.onSelectOfferCampaign,
   });
 
   final _OfferFilterMode mode;
-  final StoreSponsoredCampaign? campaign;
-  final List<StoreSponsoredCampaign> campaigns;
+  final StoreSponsoredCampaign? sponsoredCampaign;
+  final List<StoreSponsoredCampaign> sponsoredCampaigns;
+  final StoreCampaign? offerCampaign;
   final List<StoreCampaign> offerCampaigns;
-  final StoreCampaign? selectedOfferCampaign;
   final StoreRepository repository;
-  final void Function(_OfferFilterMode mode, [StoreSponsoredCampaign? campaign]) onSelect;
+  final void Function(_OfferFilterMode mode, [StoreSponsoredCampaign? campaign])
+  onSelectBase;
   final ValueChanged<StoreCampaign> onSelectOfferCampaign;
 
   @override
@@ -596,7 +635,11 @@ class _OffersCampaignFilter extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(Icons.filter_alt_outlined, size: 19, color: scheme.onSurfaceVariant),
+            Icon(
+              Icons.filter_alt_outlined,
+              size: 19,
+              color: scheme.onSurfaceVariant,
+            ),
             const SizedBox(width: 8),
             Text(
               'Filtrar ofertas',
@@ -616,18 +659,18 @@ class _OffersCampaignFilter extends StatelessWidget {
                 avatar: const Icon(Icons.local_offer, size: 17),
                 label: const Text('Todas'),
                 selected: mode == _OfferFilterMode.all,
-                onSelected: (_) => onSelect(_OfferFilterMode.all),
+                onSelected: (_) => onSelectBase(_OfferFilterMode.all),
               ),
-              if (campaigns.isNotEmpty) ...[
+              if (sponsoredCampaigns.isNotEmpty) ...[
                 const SizedBox(width: 8),
                 ChoiceChip(
                   avatar: const Icon(Icons.campaign_outlined, size: 17),
                   label: const Text('Patrocinadas'),
                   selected: mode == _OfferFilterMode.sponsored,
-                  onSelected: (_) => onSelect(_OfferFilterMode.sponsored),
+                  onSelected: (_) => onSelectBase(_OfferFilterMode.sponsored),
                 ),
               ],
-              for (final item in campaigns) ...[
+              for (final item in sponsoredCampaigns) ...[
                 const SizedBox(width: 8),
                 ChoiceChip(
                   avatar: _SponsorLogo(
@@ -636,18 +679,30 @@ class _OffersCampaignFilter extends StatelessWidget {
                     size: 22,
                   ),
                   label: Text((item.sponsorName ?? item.name).trim()),
-                  selected: mode == _OfferFilterMode.campaign && campaign?.id == item.id,
-                  onSelected: (_) => onSelect(_OfferFilterMode.campaign, item),
+                  selected:
+                      mode == _OfferFilterMode.sponsoredCampaign &&
+                      sponsoredCampaign?.id == item.id,
+                  onSelected: (_) =>
+                      onSelectBase(_OfferFilterMode.sponsoredCampaign, item),
                 ),
               ],
-              for (final offerCampaign in offerCampaigns) ...[
+              for (final item in offerCampaigns) ...[
                 const SizedBox(width: 8),
                 ChoiceChip(
-                  avatar: const Icon(Icons.event_available_outlined, size: 17),
-                  label: Text(offerCampaign.name),
-                  selected: mode == _OfferFilterMode.offerCampaign &&
-                      selectedOfferCampaign?.id == offerCampaign.id,
-                  onSelected: (_) => onSelectOfferCampaign(offerCampaign),
+                  avatar: Icon(
+                    item.kind == 'SPECIAL_DATE' ||
+                            RegExp(
+                              r'(^|\s)\d{1,2}\s*[./-]\s*\d{1,2}(\s|$)',
+                            ).hasMatch(item.name)
+                        ? Icons.calendar_month_outlined
+                        : Icons.sell_outlined,
+                    size: 17,
+                  ),
+                  label: Text(item.name),
+                  selected:
+                      mode == _OfferFilterMode.offerCampaign &&
+                      offerCampaign?.id == item.id,
+                  onSelected: (_) => onSelectOfferCampaign(item),
                 ),
               ],
             ],
@@ -656,6 +711,22 @@ class _OffersCampaignFilter extends StatelessWidget {
       ],
     );
   }
+}
+
+enum _ProductCardSize { large, medium, small }
+
+extension _ProductCardSizeX on _ProductCardSize {
+  String get storageValue => name;
+  String get label => switch (this) {
+    _ProductCardSize.large => 'Grande',
+    _ProductCardSize.medium => 'Médio',
+    _ProductCardSize.small => 'Pequeno',
+  };
+  IconData get icon => switch (this) {
+    _ProductCardSize.large => Icons.grid_view_rounded,
+    _ProductCardSize.medium => Icons.apps_rounded,
+    _ProductCardSize.small => Icons.grid_on_rounded,
+  };
 }
 
 class StoreHomePage extends StatefulWidget {
@@ -679,31 +750,126 @@ class StoreHomePage extends StatefulWidget {
 
 class _StoreHomePageState extends State<StoreHomePage> {
   StoreHomeData? _data;
+  List<StoreProduct> _catalogProducts = const [];
   bool _loading = true;
+  bool _catalogLoadingMore = false;
+  bool _catalogHasMore = false;
+  int _catalogPage = 1;
+  int _catalogRevision = 0;
   String? _error;
   StoreProductSort _sort = StoreProductSort.standard;
+  _ProductCardSize _cardSize = _ProductCardSize.large;
+  static const _cardSizePreferenceKey = 'soft_mobile_product_card_size';
 
   @override
   void initState() {
     super.initState();
+    _loadCardSize();
     _load();
   }
 
+  Future<void> _loadCardSize() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_cardSizePreferenceKey);
+      _ProductCardSize? value;
+      for (final candidate in _ProductCardSize.values) {
+        if (candidate.storageValue == raw) {
+          value = candidate;
+          break;
+        }
+      }
+      if (!mounted || value == null) return;
+      final selected = value;
+      setState(() => _cardSize = selected);
+    } catch (_) {}
+  }
+
+  Future<void> _setCardSize(_ProductCardSize value) async {
+    if (_cardSize == value) return;
+    setState(() => _cardSize = value);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_cardSizePreferenceKey, value.storageValue);
+    } catch (_) {}
+  }
+
   Future<void> _load() async {
+    final revision = ++_catalogRevision;
     setState(() {
       _loading = true;
+      _catalogLoadingMore = false;
       _error = null;
     });
     try {
-      _data = await widget.repository.home(sort: _sort);
+      final data = await widget.repository.home(sort: _sort);
+      if (!mounted || revision != _catalogRevision) return;
+      _data = data;
+      _catalogProducts = data.products.take(20).toList(growable: false);
+      _catalogPage = 1;
+      // home.php entrega ate 24 itens. Se vier mais de 20, existe pagina 2.
+      _catalogHasMore = data.products.length > 20;
     } on ApiException catch (e) {
+      if (revision != _catalogRevision) return;
       _error = e.statusCode == 404
           ? 'A API de vitrine ainda não está instalada no módulo Mobile do servidor.'
           : e.message;
     } catch (e) {
+      if (revision != _catalogRevision) return;
       _error = e.toString();
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && revision == _catalogRevision) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  Future<void> _loadMoreCatalog() async {
+    if (_loading || _catalogLoadingMore || !_catalogHasMore) return;
+    final revision = _catalogRevision;
+    final requestedSort = _sort;
+    final nextPage = _catalogPage + 1;
+    setState(() => _catalogLoadingMore = true);
+    try {
+      final result = await widget.repository.productsPage(
+        page: nextPage,
+        limit: 20,
+        sort: requestedSort,
+      );
+      if (!mounted || revision != _catalogRevision || requestedSort != _sort)
+        return;
+      final ids = _catalogProducts.map((e) => e.id).toSet();
+      final merged = <StoreProduct>[..._catalogProducts];
+      for (final product in result.products) {
+        if (ids.add(product.id)) merged.add(product);
+      }
+      setState(() {
+        _catalogProducts = merged;
+        _catalogPage = result.page;
+        _catalogHasMore = result.hasMore;
+      });
+    } on ApiException catch (e) {
+      if (mounted && revision == _catalogRevision) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Não foi possível carregar mais produtos: ${e.message}',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted && revision == _catalogRevision) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Não foi possível carregar mais produtos: $e'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted && revision == _catalogRevision) {
+        setState(() => _catalogLoadingMore = false);
+      }
     }
   }
 
@@ -718,9 +884,16 @@ class _StoreHomePageState extends State<StoreHomePage> {
             BrandLogo(
               logoUrl: GeneratedAppConfig.logoUrl.trim().isNotEmpty
                   ? GeneratedAppConfig.logoUrl.trim()
-                  : (GeneratedAppConfig.iconAndroidUrl.trim().isNotEmpty
-                      ? GeneratedAppConfig.iconAndroidUrl.trim()
-                      : null),
+                  : ((PlatformInfo.isIOS
+                                ? GeneratedAppConfig.iconIosUrl
+                                : GeneratedAppConfig.iconAndroidUrl)
+                            .trim()
+                            .isNotEmpty
+                        ? (PlatformInfo.isIOS
+                                  ? GeneratedAppConfig.iconIosUrl
+                                  : GeneratedAppConfig.iconAndroidUrl)
+                              .trim()
+                        : null),
               size: 30,
             ),
             const SizedBox(width: 10),
@@ -740,7 +913,10 @@ class _StoreHomePageState extends State<StoreHomePage> {
             icon: const Icon(Icons.brightness_6_outlined),
             onSelected: AppThemeModeController.instance.setMode,
             itemBuilder: (_) => const [
-              PopupMenuItem(value: ThemeMode.system, child: Text('Tema do aparelho')),
+              PopupMenuItem(
+                value: ThemeMode.system,
+                child: Text('Tema do aparelho'),
+              ),
               PopupMenuItem(value: ThemeMode.light, child: Text('Modo claro')),
               PopupMenuItem(value: ThemeMode.dark, child: Text('Modo escuro')),
             ],
@@ -767,14 +943,24 @@ class _StoreHomePageState extends State<StoreHomePage> {
             InkWell(
               borderRadius: BorderRadius.circular(16),
               onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => SearchPage(repository: widget.repository, cart: widget.cart)),
+                MaterialPageRoute(
+                  builder: (_) => SearchPage(
+                    repository: widget.repository,
+                    cart: widget.cart,
+                  ),
+                ),
               ),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 13,
+                ),
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
                 ),
                 child: const Row(
                   children: [
@@ -808,17 +994,58 @@ class _StoreHomePageState extends State<StoreHomePage> {
                 ),
               ] else if (data.sponsored.isNotEmpty) ...[
                 const SizedBox(height: 10),
-                _SponsoredStrip(products: data.sponsored, repository: widget.repository, cart: widget.cart),
-              ],
-              if (data.products.isNotEmpty) ...[
-                const SizedBox(height: 18),
-                Row(children:[const Expanded(child:_SectionTitle(title: 'Para você')), _SortMenu(value:_sort, onChanged:(v){setState(()=>_sort=v); _load();})]),
-                const SizedBox(height: 10),
-                _ProductGrid(
-                  products: data.products,
+                _SponsoredStrip(
+                  products: data.sponsored,
                   repository: widget.repository,
                   cart: widget.cart,
                 ),
+              ],
+              if (_catalogProducts.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    const Expanded(child: _SectionTitle(title: 'Para você')),
+                    _CardSizeMenu(value: _cardSize, onChanged: _setCardSize),
+                    const SizedBox(width: 4),
+                    _SortMenu(
+                      value: _sort,
+                      onChanged: (v) {
+                        setState(() => _sort = v);
+                        _load();
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                _ProductGrid(
+                  products: _catalogProducts,
+                  repository: widget.repository,
+                  cart: widget.cart,
+                  cardSize: _cardSize,
+                ),
+                const SizedBox(height: 12),
+                if (_catalogLoadingMore)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else if (_catalogHasMore)
+                  OutlinedButton.icon(
+                    onPressed: _loadMoreCatalog,
+                    icon: const Icon(Icons.add_circle_outline),
+                    label: const Text('Carregar mais 20 produtos'),
+                  )
+                else if (_catalogProducts.length > 20)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(
+                      'Todos os ${_catalogProducts.length} produtos desta listagem foram carregados.',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
               ],
             ],
           ],
@@ -829,7 +1056,11 @@ class _StoreHomePageState extends State<StoreHomePage> {
 }
 
 class CategoriesPage extends StatefulWidget {
-  const CategoriesPage({super.key, required this.repository, required this.cart});
+  const CategoriesPage({
+    super.key,
+    required this.repository,
+    required this.cart,
+  });
   final StoreRepository repository;
   final CartController cart;
 
@@ -860,37 +1091,47 @@ class _CategoriesPageState extends State<CategoriesPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Categorias')),
-        body: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : _error != null
-                ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!)))
-                : ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _categories.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) {
-                      final c = _categories[i];
-                      return Card(
-                        child: ListTile(
-                          leading: const CircleAvatar(child: Icon(Icons.category_outlined)),
-                          title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w800)),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => ProductListPage(
-                                title: c.name,
-                                repository: widget.repository,
-                                cart: widget.cart,
-                                categoryId: c.id,
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+    appBar: AppBar(title: const Text('Categorias')),
+    body: _loading
+        ? const Center(child: CircularProgressIndicator())
+        : _error != null
+        ? Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(_error!),
+            ),
+          )
+        : ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: _categories.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (_, i) {
+              final c = _categories[i];
+              return Card(
+                child: ListTile(
+                  leading: const CircleAvatar(
+                    child: Icon(Icons.category_outlined),
                   ),
-      );
+                  title: Text(
+                    c.name,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ProductListPage(
+                        title: c.name,
+                        repository: widget.repository,
+                        cart: widget.cart,
+                        categoryId: c.id,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+  );
 }
 
 class SearchPage extends StatefulWidget {
@@ -931,39 +1172,98 @@ class _SearchPageState extends State<SearchPage> {
     }
   }
 
+  Future<void> _scanBarcode() async {
+    if (_loading) return;
+    final code = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const BarcodeScannerPage()),
+    );
+    if (!mounted || code == null || code.trim().isEmpty) return;
+
+    _controller.text = code.trim();
+    setState(() {
+      _loading = true;
+      _products = const [];
+      _error = null;
+    });
+    try {
+      final product = await widget.repository.productByBarcode(code);
+      if (!mounted) return;
+      setState(() {
+        if (product == null) {
+          _error = 'Nenhum produto foi encontrado para este código de barras.';
+        } else {
+          _products = <StoreProduct>[product];
+        }
+      });
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Buscar')),
-        body: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            TextField(
-              controller: _controller,
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _search(),
-              decoration: InputDecoration(
-                hintText: 'Produto, código ou descrição',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: IconButton(onPressed: _search, icon: const Icon(Icons.arrow_forward)),
-              ),
+    appBar: AppBar(title: const Text('Buscar')),
+    body: ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        TextField(
+          controller: _controller,
+          textInputAction: TextInputAction.search,
+          onSubmitted: (_) => _search(),
+          decoration: InputDecoration(
+            hintText: 'Produto, código, descrição ou código de barras',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Ler código de barras com a câmera',
+                  onPressed: _scanBarcode,
+                  icon: const Icon(Icons.qr_code_scanner),
+                ),
+                IconButton(
+                  tooltip: 'Buscar',
+                  onPressed: _search,
+                  icon: const Icon(Icons.arrow_forward),
+                ),
+              ],
             ),
-            if (_loading) ...[
-              const SizedBox(height: 18),
-              const LinearProgressIndicator(),
-            ],
-            if (_error != null) ...[
-              const SizedBox(height: 18),
-              Text(_error!),
-            ],
-            if (_products.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              Align(alignment: Alignment.centerRight, child: _SortMenu(value:_sort,onChanged:(v){setState(()=>_sort=v);_search();})),
-              const SizedBox(height: 10),
-              _ProductGrid(products: _products, repository: widget.repository, cart: widget.cart),
-            ],
-          ],
+          ),
         ),
-      );
+        if (_loading) ...[
+          const SizedBox(height: 18),
+          const LinearProgressIndicator(),
+        ],
+        if (_error != null) ...[const SizedBox(height: 18), Text(_error!)],
+        if (_products.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Align(
+            alignment: Alignment.centerRight,
+            child: _SortMenu(
+              value: _sort,
+              onChanged: (v) {
+                setState(() => _sort = v);
+                _search();
+              },
+            ),
+          ),
+          const SizedBox(height: 10),
+          _ProductGrid(
+            products: _products,
+            repository: widget.repository,
+            cart: widget.cart,
+            onProductAdded: () {
+              _controller.clear();
+              _products = const [];
+              Navigator.of(context).pop(true);
+            },
+          ),
+        ],
+      ],
+    ),
+  );
 }
 
 class ProductListPage extends StatefulWidget {
@@ -986,6 +1286,10 @@ class ProductListPage extends StatefulWidget {
 class _ProductListPageState extends State<ProductListPage> {
   List<StoreProduct> _products = const [];
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = false;
+  int _page = 1;
+  int _loadRevision = 0;
   String? _error;
   StoreProductSort _sort = StoreProductSort.standard;
 
@@ -995,32 +1299,112 @@ class _ProductListPageState extends State<ProductListPage> {
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool reset = true}) async {
+    final revision = reset ? ++_loadRevision : _loadRevision;
+    if (reset) {
+      setState(() {
+        _loading = true;
+        _loadingMore = false;
+        _error = null;
+      });
+    } else {
+      if (_loading || _loadingMore || !_hasMore) return;
+      setState(() => _loadingMore = true);
+    }
     try {
-      _products = await widget.repository.products(categoryId: widget.categoryId, sort: _sort);
+      final result = await widget.repository.productsPage(
+        categoryId: widget.categoryId,
+        sort: _sort,
+        page: reset ? 1 : _page + 1,
+        limit: 20,
+      );
+      if (!mounted || revision != _loadRevision) return;
+      final next = reset ? <StoreProduct>[] : <StoreProduct>[..._products];
+      final ids = next.map((e) => e.id).toSet();
+      for (final product in result.products) {
+        if (ids.add(product.id)) next.add(product);
+      }
+      setState(() {
+        _products = next;
+        _page = result.page;
+        _hasMore = result.hasMore;
+        _error = null;
+      });
     } on ApiException catch (e) {
-      _error = e.message;
+      if (!mounted || revision != _loadRevision) return;
+      if (reset) {
+        setState(() => _error = e.message);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Não foi possível carregar mais produtos: ${e.message}',
+            ),
+          ),
+        );
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && revision == _loadRevision) {
+        setState(() {
+          _loading = false;
+          _loadingMore = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text(widget.title)),
-        body: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : _error != null
-                ? Center(child: Text(_error!))
-                : SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(crossAxisAlignment:CrossAxisAlignment.stretch, children:[Align(alignment:Alignment.centerRight,child:_SortMenu(value:_sort,onChanged:(v){setState(()=>_sort=v);_load();})),const SizedBox(height:10),_ProductGrid(
-                      products: _products,
-                      repository: widget.repository,
-                      cart: widget.cart,
-                    )]),
+    appBar: AppBar(title: Text(widget.title)),
+    body: _loading
+        ? const Center(child: CircularProgressIndicator())
+        : _error != null
+        ? Center(child: Text(_error!))
+        : SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _SortMenu(
+                    value: _sort,
+                    onChanged: (v) {
+                      setState(() => _sort = v);
+                      _load();
+                    },
                   ),
-      );
+                ),
+                const SizedBox(height: 10),
+                if (_products.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 48),
+                    child: Center(child: Text('Nenhum produto encontrado.')),
+                  )
+                else
+                  _ProductGrid(
+                    products: _products,
+                    repository: widget.repository,
+                    cart: widget.cart,
+                  ),
+                const SizedBox(height: 12),
+                if (_loadingMore)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else if (_hasMore)
+                  OutlinedButton.icon(
+                    onPressed: () => _load(reset: false),
+                    icon: const Icon(Icons.add_circle_outline),
+                    label: const Text('Carregar mais 20 produtos'),
+                  ),
+              ],
+            ),
+          ),
+  );
 }
 
 class CartPage extends StatelessWidget {
@@ -1050,7 +1434,9 @@ class CartPage extends StatelessWidget {
       // nesses casos, pois isso mascarava falhas temporarias como sessao expirada.
       if (!e.isUnauthorized) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(e.message)));
         }
         return false;
       }
@@ -1095,220 +1481,283 @@ class CartPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          title: const Text('Carrinho'),
-          actions: [
-            AnimatedBuilder(
-              animation: cart,
-              builder: (_, __) => cart.items.isEmpty
-                  ? const SizedBox.shrink()
-                  : TextButton(
-                      onPressed: () => cart.toggleAll(!cart.allSelected),
-                      child: Text(cart.allSelected ? 'Desmarcar todos' : 'Selecionar todos'),
-                    ),
-            ),
-          ],
-        ),
-        body: AnimatedBuilder(
+    appBar: AppBar(
+      title: const Text('Carrinho'),
+      actions: [
+        AnimatedBuilder(
           animation: cart,
-          builder: (_, __) {
-            if (!cart.isLoaded) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (cart.items.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.shopping_cart_outlined,
-                      size: 72,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(height: 12),
-                    const Text('Seu carrinho está vazio.'),
-                  ],
+          builder: (_, __) => cart.items.isEmpty
+              ? const SizedBox.shrink()
+              : TextButton(
+                  onPressed: () => cart.toggleAll(!cart.allSelected),
+                  child: Text(
+                    cart.allSelected ? 'Desmarcar todos' : 'Selecionar todos',
+                  ),
                 ),
-              );
-            }
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 150),
+        ),
+      ],
+    ),
+    body: AnimatedBuilder(
+      animation: cart,
+      builder: (_, __) {
+        if (!cart.isLoaded) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (cart.items.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer.withOpacity(.35),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Checkbox(
-                        value: cart.allSelected,
-                        onChanged: (value) => cart.toggleAll(value ?? false),
-                      ),
-                      Expanded(
-                        child: Text(
-                          '${cart.selectedItemCount} de ${cart.itemCount} item(ns) selecionado(s)',
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                    ],
-                  ),
+                Icon(
+                  Icons.shopping_cart_outlined,
+                  size: 72,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
-                const SizedBox(height: 8),
-                ...cart.items.map((line) => AnimatedOpacity(
-                      opacity: line.selected ? 1 : .55,
-                      duration: const Duration(milliseconds: 160),
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(6, 10, 8, 10),
-                          child: Row(
+                const SizedBox(height: 12),
+                const Text('Seu carrinho está vazio.'),
+              ],
+            ),
+          );
+        }
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 150),
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Theme.of(
+                  context,
+                ).colorScheme.primaryContainer.withOpacity(.35),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Checkbox(
+                    value: cart.allSelected,
+                    onChanged: (value) => cart.toggleAll(value ?? false),
+                  ),
+                  Expanded(
+                    child: Text(
+                      '${cart.selectedItemCount} de ${cart.itemCount} item(ns) selecionado(s)',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...cart.items.map(
+              (line) => AnimatedOpacity(
+                opacity: line.selected ? 1 : .55,
+                duration: const Duration(milliseconds: 160),
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 10, 8, 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Checkbox(
+                          value: line.selected,
+                          onChanged: (value) =>
+                              cart.toggleSelected(line.lineId, value ?? false),
+                        ),
+                        SizedBox(
+                          width: 70,
+                          height: 70,
+                          child: line.product.imageUrl == null
+                              ? const Icon(Icons.shopping_bag_outlined)
+                              : Image.network(
+                                  api.resolvePublicUrl(line.product.imageUrl) ??
+                                      line.product.imageUrl!,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, __, ___) => const Icon(
+                                    Icons.image_not_supported_outlined,
+                                  ),
+                                ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Checkbox(
-                                value: line.selected,
-                                onChanged: (value) => cart.toggleSelected(line.lineId, value ?? false),
+                              Text(
+                                line.product.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                ),
                               ),
-                              SizedBox(
-                                width: 70,
-                                height: 70,
-                                child: line.product.imageUrl == null
-                                    ? const Icon(Icons.shopping_bag_outlined)
-                                    : Image.network(
-                                        api.resolvePublicUrl(line.product.imageUrl) ?? line.product.imageUrl!,
-                                        fit: BoxFit.contain,
-                                        errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported_outlined),
-                                      ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${_money(line.pricing.effectiveUnitPrice)} ${_unitSuffix(line.product.unit)}',
                               ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(line.product.name, style: const TextStyle(fontWeight: FontWeight.w900)),
-                                    const SizedBox(height: 4),
-                                    Text('${_money(line.pricing.effectiveUnitPrice)} ${_unitSuffix(line.product.unit)}'),
-                                    if (line.observationSummary.trim().isNotEmpty) ...[
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        line.observationSummary,
-                                        maxLines: 4,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              if (line.observationSummary
+                                  .trim()
+                                  .isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  line.observationSummary,
+                                  maxLines: 4,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  IconButton.filledTonal(
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: () =>
+                                        cart.increment(line.lineId, -1),
+                                    icon: const Icon(Icons.remove, size: 18),
+                                  ),
+                                  SizedBox(
+                                    width: 72,
+                                    child: Text(
+                                      formatQuantity(
+                                        line.quantityVisual,
+                                        line.quantityMultiplier != null
+                                            ? 0
+                                            : (line
+                                                          .product
+                                                          .quantityRules
+                                                          ?.isB2b ==
+                                                      true
+                                                  ? 3
+                                                  : 0),
                                       ),
-                                    ],
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        IconButton.filledTonal(
-                                          visualDensity: VisualDensity.compact,
-                                          onPressed: () => cart.increment(line.lineId, -1),
-                                          icon: const Icon(Icons.remove, size: 18),
-                                        ),
-                                        SizedBox(
-                                          width: 72,
-                                          child: Text(
-                                            formatQuantity(line.quantityVisual, line.quantityMultiplier != null ? 0 : (line.product.quantityRules?.isB2b == true ? 3 : 0)),
-                                            textAlign: TextAlign.center,
-                                            style: const TextStyle(fontWeight: FontWeight.w900),
-                                          ),
-                                        ),
-                                        IconButton.filledTonal(
-                                          visualDensity: VisualDensity.compact,
-                                          onPressed: () => cart.increment(line.lineId, 1),
-                                          icon: const Icon(Icons.add, size: 18),
-                                        ),
-                                        const Spacer(),
-                                        Text(_money(line.subtotal), style: const TextStyle(fontWeight: FontWeight.w900)),
-                                      ],
-                                    ),
-                                    if (line.quantityMultiplier != null) ...[
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        '${formatQuantity(line.quantityReal, 3)} ${line.product.unit ?? ''} no pedido',
-                                        style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                      ),
-                                    ],
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: TextButton.icon(
-                                        onPressed: () => cart.remove(line.lineId),
-                                        icon: const Icon(Icons.delete_outline, size: 17),
-                                        label: const Text('Remover'),
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w900,
                                       ),
                                     ),
-                                  ],
+                                  ),
+                                  IconButton.filledTonal(
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: () =>
+                                        cart.increment(line.lineId, 1),
+                                    icon: const Icon(Icons.add, size: 18),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    _money(line.subtotal),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (line.quantityMultiplier != null) ...[
+                                const SizedBox(height: 3),
+                                Text(
+                                  '${formatQuantity(line.quantityReal, 3)} ${line.product.unit ?? ''} no pedido',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton.icon(
+                                  onPressed: () => cart.remove(line.lineId),
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 17,
+                                  ),
+                                  label: const Text('Remover'),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      ),
-                    )),
-                const SizedBox(height: 12),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Subtotal selecionado (${cart.selectedItemCount})'),
-                            Text(_money(cart.selectedTotal), style: const TextStyle(fontWeight: FontWeight.w900)),
-                          ],
-                        ),
-                        if (cart.selectedItemCount != cart.itemCount) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            '${cart.itemCount - cart.selectedItemCount} item(ns) ficaram guardados no carrinho e não entrarão nesta compra.',
-                            style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                          ),
-                        ],
-                        const SizedBox(height: 8),
-                        Text(
-                          'Preço, campanhas, frete e pedido mínimo serão recalculados pelo servidor somente com os itens selecionados.',
-                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                        ),
                       ],
                     ),
                   ),
                 ),
-              ],
-            );
-          },
-        ),
-        bottomNavigationBar: AnimatedBuilder(
-          animation: cart,
-          builder: (_, __) => cart.items.isEmpty
-              ? const SizedBox.shrink()
-              : SafeArea(
-                  minimum: const EdgeInsets.all(14),
-                  child: FilledButton(
-                    onPressed: cart.selectedItems.isEmpty
-                        ? null
-                        : () async {
-                            final logged = await _ensureLogin(context);
-                            if (!logged || !context.mounted) return;
-                            await Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => CheckoutPage(
-                                  repository: StoreRepository(api, auth: auth),
-                                  cart: cart,
-                                  reauthenticate: () => _ensureLogin(context),
-                                ),
-                              ),
-                            );
-                          },
-                    child: Text(
-                      cart.selectedItems.isEmpty
-                          ? 'Selecione ao menos um item'
-                          : 'Continuar com ${cart.selectedItemCount} item(ns) · ${_money(cart.selectedTotal)}',
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Subtotal selecionado (${cart.selectedItemCount})',
+                        ),
+                        Text(
+                          _money(cart.selectedTotal),
+                          style: const TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                      ],
                     ),
-                  ),
+                    if (cart.selectedItemCount != cart.itemCount) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        '${cart.itemCount - cart.selectedItemCount} item(ns) ficaram guardados no carrinho e não entrarão nesta compra.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    Text(
+                      'Preço, campanhas, frete e pedido mínimo serão recalculados pelo servidor somente com os itens selecionados.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ),
-        ),
-      );
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+    bottomNavigationBar: AnimatedBuilder(
+      animation: cart,
+      builder: (_, __) => cart.items.isEmpty
+          ? const SizedBox.shrink()
+          : SafeArea(
+              minimum: const EdgeInsets.all(14),
+              child: FilledButton(
+                onPressed: cart.selectedItems.isEmpty
+                    ? null
+                    : () async {
+                        final logged = await _ensureLogin(context);
+                        if (!logged || !context.mounted) return;
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => CheckoutPage(
+                              repository: StoreRepository(api, auth: auth),
+                              cart: cart,
+                              reauthenticate: () => _ensureLogin(context),
+                            ),
+                          ),
+                        );
+                      },
+                child: Text(
+                  cart.selectedItems.isEmpty
+                      ? 'Selecione ao menos um item'
+                      : 'Continuar com ${cart.selectedItemCount} item(ns) · ${_money(cart.selectedTotal)}',
+                ),
+              ),
+            ),
+    ),
+  );
 }
 
 class AccountPage extends StatefulWidget {
@@ -1357,75 +1806,101 @@ class _AccountPageState extends State<AccountPage> {
 
   Future<void> _refresh() => refreshSession();
 
+  bool _sessionRefreshRunning = false;
+
   Future<void> refreshSession() async {
+    if (_sessionRefreshRunning) return;
+    _sessionRefreshRunning = true;
     if (mounted) setState(() => _checking = true);
-    final localName = await widget.store.customerName;
-    final biometricEnabled = await widget.store.biometricEnabled;
-    final biometricAvailable = widget.bootstrap.security.biometrics ? await widget.biometrics.isAvailable() : false;
-    final hasSession = await widget.auth.ensureAuthenticated();
-    if (!hasSession) {
+    try {
+      final localName = await widget.store.customerName;
+      final biometricEnabled = await widget.store.biometricEnabled;
+      final biometricAvailable = widget.bootstrap.security.biometrics
+          ? await widget.biometrics.isAvailable()
+          : false;
+      final localAccess = (await widget.store.accessToken)?.trim() ?? '';
+      final localRefresh = (await widget.store.refreshToken)?.trim() ?? '';
+      if (mounted && (localAccess.isNotEmpty || localRefresh.isNotEmpty)) {
+        setState(() {
+          _logged = true;
+          _name = localName;
+        });
+      }
+      final hasSession = await widget.auth.ensureAuthenticated();
+      if (!hasSession) {
+        if (mounted) {
+          setState(() {
+            _logged = false;
+            _name = null;
+            _photoUrl = null;
+            _checking = false;
+            _biometricEnabled = biometricEnabled;
+            _biometricAvailable = biometricAvailable;
+          });
+        }
+        return;
+      }
+
+      // Assim que existe token utilizavel, a Conta nao volta visualmente para
+      // "Entrar" enquanto /me.php esta confirmando os dados no servidor.
       if (mounted) {
         setState(() {
-          _logged = false;
-          _name = null;
-          _photoUrl = null;
-          _checking = false;
+          _logged = true;
+          _name = localName;
           _biometricEnabled = biometricEnabled;
           _biometricAvailable = biometricAvailable;
         });
       }
-      return;
-    }
 
-    // Assim que existe token utilizavel, a Conta nao volta visualmente para
-    // "Entrar" enquanto /me.php esta confirmando os dados no servidor.
-    if (mounted) {
-      setState(() {
-        _logged = true;
-        _name = localName;
-        _biometricEnabled = biometricEnabled;
-        _biometricAvailable = biometricAvailable;
-      });
-    }
-
-    try {
-      final json = await widget.auth.me();
-      final customer = mapValue(json['customer']);
-      final name = nullableString(customer['name']) ?? localName;
-      var photoUrl = nullableString(customer['photo_url']);
       try {
-        final profile = await widget.repository.accountProfile();
-        photoUrl = nullableString(profile['photo_url']) ?? photoUrl;
-      } catch (_) {}
-      var notificationsEnabled = _notificationsEnabled;
-      if (widget.bootstrap.features.push) {
+        final json = await widget.auth.me();
+        final customer = mapValue(json['customer']);
+        final name = nullableString(customer['name']) ?? localName;
+        var photoUrl = nullableString(customer['photo_url']);
         try {
-          notificationsEnabled = await widget.repository.notificationPreference();
+          final profile = await widget.repository.accountProfile();
+          photoUrl = nullableString(profile['photo_url']) ?? photoUrl;
         } catch (_) {}
-      }
-      if (mounted) {
+        var notificationsEnabled = _notificationsEnabled;
+        if (widget.bootstrap.features.push) {
+          try {
+            notificationsEnabled = await widget.repository
+                .notificationPreference();
+          } catch (_) {}
+        }
+        if (mounted) {
+          setState(() {
+            _logged = true;
+            _name = name;
+            _photoUrl = photoUrl;
+            _notificationsEnabled = notificationsEnabled;
+            _checking = false;
+          });
+        }
+      } on ApiException catch (e) {
+        if (!mounted) return;
         setState(() {
-          _logged = true;
-          _name = name;
-          _photoUrl = photoUrl;
-          _notificationsEnabled = notificationsEnabled;
+          // So derruba a conta quando o servidor confirmou 401. Falha de rede
+          // nao transforma uma sessao local existente em "deslogado".
+          if (e.isUnauthorized) {
+            _logged = false;
+            _name = null;
+            _photoUrl = null;
+          }
           _checking = false;
         });
+      } catch (_) {
+        if (mounted) setState(() => _checking = false);
       }
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        // So derruba a conta quando o servidor confirmou 401. Falha de rede
-        // nao transforma uma sessao local existente em "deslogado".
-        if (e.isUnauthorized) {
-          _logged = false;
-          _name = null;
-          _photoUrl = null;
-        }
-        _checking = false;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _checking = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _checking = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      _sessionRefreshRunning = false;
     }
   }
 
@@ -1460,8 +1935,8 @@ class _AccountPageState extends State<AccountPage> {
       final mime = lower.endsWith('.png')
           ? 'image/png'
           : lower.endsWith('.webp')
-              ? 'image/webp'
-              : 'image/jpeg';
+          ? 'image/webp'
+          : 'image/jpeg';
       final url = await widget.repository.uploadProfilePhoto(
         imageBase64: base64Encode(bytes),
         mimeType: mime,
@@ -1473,7 +1948,10 @@ class _AccountPageState extends State<AccountPage> {
         );
       }
     } on ApiException catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
       if (mounted) setState(() => _photoChanging = false);
     }
@@ -1494,7 +1972,10 @@ class _AccountPageState extends State<AccountPage> {
       await widget.repository.deleteProfilePhoto();
       if (mounted) setState(() => _photoUrl = null);
     } on ApiException catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
       if (mounted) setState(() => _photoChanging = false);
     }
@@ -1503,36 +1984,65 @@ class _AccountPageState extends State<AccountPage> {
   Future<void> _toggleBiometric(bool enabled) async {
     if (_biometricChanging) return;
     if (!widget.bootstrap.security.biometrics) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Biometria desativada na configuração do Mobile.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Biometria desativada na configuração do Mobile.'),
+        ),
+      );
       return;
     }
     if (enabled && !_biometricAvailable) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Nenhuma biometria foi cadastrada neste aparelho. Cadastre Face ID/Touch ID ou biometria em ${PlatformInfo.biometricSettingsLabel} e tente novamente.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Nenhuma biometria foi cadastrada neste aparelho. Cadastre uma digital/rosto em ${PlatformInfo.biometricSettingsLabel} e tente novamente.',
+          ),
+        ),
+      );
       return;
     }
     final refresh = await widget.store.refreshToken;
     if (enabled && (refresh == null || refresh.isEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ative “Manter conectado” no próximo login para usar a biometria.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Ative “Manter conectado” no próximo login para usar a biometria.',
+          ),
+        ),
+      );
       return;
     }
     setState(() => _biometricChanging = true);
     try {
       if (enabled) {
-        final ok = await widget.biometrics.authenticate(reason: 'Confirme sua biometria para habilitar o acesso ao aplicativo');
+        final ok = await widget.biometrics.authenticate(
+          reason:
+              'Confirme sua biometria para habilitar o acesso ao aplicativo',
+        );
         if (!ok) return;
       }
       await widget.auth.setBiometric(enabled);
       if (mounted) {
         setState(() => _biometricEnabled = enabled);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(enabled ? 'Acesso por biometria ativado.' : 'Acesso por biometria desativado.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              enabled
+                  ? 'Acesso por biometria ativado.'
+                  : 'Acesso por biometria desativado.',
+            ),
+          ),
+        );
       }
     } on ApiException catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
       if (mounted) setState(() => _biometricChanging = false);
     }
   }
-
 
   Future<void> _toggleNotifications(bool enabled) async {
     if (_notificationsChanging) return;
@@ -1541,7 +2051,10 @@ class _AccountPageState extends State<AccountPage> {
       final saved = await widget.repository.setNotificationPreference(enabled);
       if (mounted) setState(() => _notificationsEnabled = saved);
     } on ApiException catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
       if (mounted) setState(() => _notificationsChanging = false);
     }
@@ -1554,181 +2067,252 @@ class _AccountPageState extends State<AccountPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Minha conta')),
-        body: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 30,
-                      backgroundImage: _logged && (_photoUrl?.trim().isNotEmpty ?? false)
-                          ? NetworkImage(widget.api.resolvePublicUrl(_photoUrl) ?? _photoUrl!)
-                          : null,
-                      child: !(_logged && (_photoUrl?.trim().isNotEmpty ?? false))
-                          ? Icon(_logged ? Icons.person : Icons.person_outline)
-                          : null,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _logged ? (_name ?? 'Cliente') : 'Entre na sua conta',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(_logged ? 'Acompanhe seus pedidos e endereços.' : 'Login por e-mail ou CPF.'),
-                        ],
+    appBar: AppBar(title: const Text('Minha conta')),
+    body: ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 30,
+                  backgroundImage:
+                      _logged && (_photoUrl?.trim().isNotEmpty ?? false)
+                      ? NetworkImage(
+                          widget.api.resolvePublicUrl(_photoUrl) ?? _photoUrl!,
+                        )
+                      : null,
+                  child: !(_logged && (_photoUrl?.trim().isNotEmpty ?? false))
+                      ? Icon(_logged ? Icons.person : Icons.person_outline)
+                      : null,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _logged ? (_name ?? 'Cliente') : 'Entre na sua conta',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        _logged
+                            ? 'Acompanhe seus pedidos e endereços.'
+                            : 'Login por e-mail ou CPF.',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (_checking) const LinearProgressIndicator(minHeight: 2),
+        if (_checking) const SizedBox(height: 10),
+        if (_logged) ...[
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.receipt_long_outlined),
+              title: const Text('Meus pedidos'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => OrdersPage(
+                    repository: widget.repository,
+                    cart: widget.cart,
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            if (_checking) const LinearProgressIndicator(minHeight: 2),
-            if (_checking) const SizedBox(height: 10),
-            if (_logged) ...[
-              Card(child: ListTile(
-                leading: const Icon(Icons.receipt_long_outlined), title: const Text('Meus pedidos'), trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => OrdersPage(repository: widget.repository))),
-              )),
-              Card(child: ListTile(
-                leading: const Icon(Icons.favorite_border), title: const Text('Favoritos'), trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => FavoritesPage(repository: widget.repository, cart: widget.cart))),
-              )),
-              Card(child: ListTile(
-                leading: const Icon(Icons.location_on_outlined), title: const Text('Meus endereços'), trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AddressesPage(repository: widget.repository))),
-              )),
-              Card(
-                child: ListTile(
-                  leading: _photoChanging
-                      ? const SizedBox(width:24,height:24,child:CircularProgressIndicator(strokeWidth:2))
-                      : const Icon(Icons.account_circle_outlined),
-                  title: const Text('Foto de perfil'),
-                  subtitle: Text((_photoUrl?.trim().isNotEmpty ?? false)
-                      ? 'Foto sincronizada com sua conta.'
-                      : 'Adicione uma foto à sua conta.'),
-                  trailing: PopupMenuButton<String>(
-                    enabled: !_photoChanging,
-                    onSelected: (value) {
-                      if (value == 'upload') unawaited(_changeProfilePhoto());
-                      if (value == 'open') unawaited(_openProfilePhoto());
-                      if (value == 'delete') unawaited(_removeProfilePhoto());
-                    },
-                    itemBuilder: (_) => [
-                      const PopupMenuItem(value:'upload', child:Text('Enviar / trocar foto')),
-                      if (_photoUrl?.trim().isNotEmpty ?? false)
-                        const PopupMenuItem(value:'open', child:Text('Abrir / baixar foto')),
-                      if (_photoUrl?.trim().isNotEmpty ?? false)
-                        const PopupMenuItem(value:'delete', child:Text('Remover foto')),
-                    ],
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.favorite_border),
+              title: const Text('Favoritos'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => FavoritesPage(
+                    repository: widget.repository,
+                    cart: widget.cart,
                   ),
-                  onTap: _photoChanging ? null : _changeProfilePhoto,
                 ),
               ),
-              if (widget.bootstrap.security.biometrics)
-                Card(
-                  child: SwitchListTile(
-                    secondary: const Icon(Icons.fingerprint),
-                    title: const Text('Entrar com biometria'),
-                    subtitle: Text(_biometricAvailable
-                        ? (_biometricEnabled ? 'Ativado neste aparelho.' : 'Use sua digital/biometria para entrar sem digitar a senha.')
-                        : 'Cadastre Face ID/Touch ID ou biometria em ${PlatformInfo.biometricSettingsLabel} para habilitar.'),
-                    value: _biometricEnabled,
-                    onChanged: _biometricChanging ? null : _toggleBiometric,
-                  ),
-                ),
-              if (widget.bootstrap.features.push)
-                Card(
-                  child: SwitchListTile(
-                    secondary: const Icon(Icons.notifications_outlined),
-                    title: const Text('Notificações'),
-                    value: _notificationsEnabled,
-                    onChanged: _notificationsChanging ? null : _toggleNotifications,
-                  ),
-                ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(onPressed: _logout, icon: const Icon(Icons.logout), label: const Text('Sair')),
-            ] else
-              FilledButton.icon(onPressed: _checking ? null : _login, icon: const Icon(Icons.login), label: const Text('Entrar')),
-            const SizedBox(height: 28),
-            const _BuildDebugInfo(),
-            const SizedBox(height: 8),
-          ],
-        ),
-      );
-}
-
-class _BuildDebugInfo extends StatelessWidget {
-  const _BuildDebugInfo();
-
-  @override
-  Widget build(BuildContext context) {
-    final textStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(.68),
-          fontSize: 10.5,
-          height: 1.35,
-        );
-    return FutureBuilder<PackageInfo>(
-      future: PackageInfo.fromPlatform(),
-      builder: (context, snapshot) {
-        final info = snapshot.data;
-        final version = info == null
-            ? 'carregando...'
-            : '${info.version}+${info.buildNumber}';
-        final builtAt = GeneratedAppConfig.buildGeneratedAt.trim().isEmpty
-            ? 'data do build indisponível'
-            : GeneratedAppConfig.buildGeneratedAt.trim();
-        return Semantics(
-          label: 'Informações de versão do aplicativo',
-          child: Text(
-            'Soft Ecommerce Mobile v$version\nBuild: $builtAt',
-            textAlign: TextAlign.center,
-            style: textStyle,
+            ),
           ),
-        );
-      },
-    );
-  }
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.location_on_outlined),
+              title: const Text('Meus endereços'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => AddressesPage(repository: widget.repository),
+                ),
+              ),
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: _photoChanging
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.account_circle_outlined),
+              title: const Text('Foto de perfil'),
+              subtitle: Text(
+                (_photoUrl?.trim().isNotEmpty ?? false)
+                    ? 'Foto sincronizada com sua conta.'
+                    : 'Adicione uma foto à sua conta.',
+              ),
+              trailing: PopupMenuButton<String>(
+                enabled: !_photoChanging,
+                onSelected: (value) {
+                  if (value == 'upload') unawaited(_changeProfilePhoto());
+                  if (value == 'open') unawaited(_openProfilePhoto());
+                  if (value == 'delete') unawaited(_removeProfilePhoto());
+                },
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: 'upload',
+                    child: Text('Enviar / trocar foto'),
+                  ),
+                  if (_photoUrl?.trim().isNotEmpty ?? false)
+                    const PopupMenuItem(
+                      value: 'open',
+                      child: Text('Abrir / baixar foto'),
+                    ),
+                  if (_photoUrl?.trim().isNotEmpty ?? false)
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Text('Remover foto'),
+                    ),
+                ],
+              ),
+              onTap: _photoChanging ? null : _changeProfilePhoto,
+            ),
+          ),
+          if (widget.bootstrap.security.biometrics)
+            Card(
+              child: SwitchListTile(
+                secondary: const Icon(Icons.fingerprint),
+                title: const Text('Entrar com biometria'),
+                subtitle: Text(
+                  _biometricAvailable
+                      ? (_biometricEnabled
+                            ? 'Ativado neste aparelho.'
+                            : 'Use sua digital/biometria para entrar sem digitar a senha.')
+                      : 'Cadastre uma biometria em ${PlatformInfo.biometricSettingsLabel} para habilitar.',
+                ),
+                value: _biometricEnabled,
+                onChanged: _biometricChanging ? null : _toggleBiometric,
+              ),
+            ),
+          if (widget.bootstrap.features.push)
+            Card(
+              child: SwitchListTile(
+                secondary: const Icon(Icons.notifications_outlined),
+                title: const Text('Notificações'),
+                value: _notificationsEnabled,
+                onChanged: _notificationsChanging ? null : _toggleNotifications,
+              ),
+            ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _logout,
+            icon: const Icon(Icons.logout),
+            label: const Text('Sair'),
+          ),
+        ] else
+          FilledButton.icon(
+            onPressed: _checking ? null : _login,
+            icon: const Icon(Icons.login),
+            label: const Text('Entrar'),
+          ),
+      ],
+    ),
+  );
 }
 
 class _ProductGrid extends StatelessWidget {
-  const _ProductGrid({required this.products, required this.repository, required this.cart});
+  const _ProductGrid({
+    required this.products,
+    required this.repository,
+    required this.cart,
+    this.cardSize = _ProductCardSize.large,
+    this.onProductAdded,
+  });
+
   final List<StoreProduct> products;
   final StoreRepository repository;
   final CartController cart;
+  final _ProductCardSize cardSize;
+  final VoidCallback? onProductAdded;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
-        builder: (context, constraints) {
-          final cols = constraints.maxWidth >= 760 ? 4 : 2;
-          final width = (constraints.maxWidth - ((cols - 1) * 10)) / cols;
-          return Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: products
-                .map((p) => SizedBox(
-                      width: width,
-                      child: _ProductCard(product: p, repository: repository, cart: cart),
-                    ))
-                .toList(),
-          );
-        },
+    builder: (context, constraints) {
+      final cols = switch (cardSize) {
+        _ProductCardSize.large => constraints.maxWidth >= 760 ? 4 : 2,
+        _ProductCardSize.medium =>
+          constraints.maxWidth >= 760
+              ? 5
+              : (constraints.maxWidth >= 520 ? 4 : 3),
+        _ProductCardSize.small =>
+          constraints.maxWidth >= 760
+              ? 6
+              : (constraints.maxWidth >= 520 ? 5 : 4),
+      };
+      final gap = switch (cardSize) {
+        _ProductCardSize.large => 10.0,
+        _ProductCardSize.medium => 8.0,
+        _ProductCardSize.small => 6.0,
+      };
+      final width = (constraints.maxWidth - ((cols - 1) * gap)) / cols;
+      return Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: products
+            .map(
+              (p) => SizedBox(
+                width: width,
+                child: _ProductCard(
+                  product: p,
+                  repository: repository,
+                  cart: cart,
+                  size: cardSize,
+                  onProductAdded: onProductAdded,
+                ),
+              ),
+            )
+            .toList(),
       );
+    },
+  );
 }
 
 class _ProductCard extends StatefulWidget {
-  const _ProductCard({required this.product, required this.repository, required this.cart});
+  const _ProductCard({
+    required this.product,
+    required this.repository,
+    required this.cart,
+    required this.size,
+    this.onProductAdded,
+  });
   final StoreProduct product;
   final StoreRepository repository;
   final CartController cart;
+  final _ProductCardSize size;
+  final VoidCallback? onProductAdded;
 
   @override
   State<_ProductCard> createState() => _ProductCardState();
@@ -1751,64 +2335,229 @@ class _ProductCardState extends State<_ProductCard> {
       final value = await widget.repository.toggleFavorite(widget.product.id);
       if (mounted) setState(() => _favorite = value);
     } on ApiException catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
       if (mounted) setState(() => _changingFavorite = false);
     }
+  }
+
+  Future<void> _openProduct() async {
+    final added = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ProductDetailPage(
+          product: widget.product,
+          repository: widget.repository,
+          cart: widget.cart,
+        ),
+      ),
+    );
+    if (added == true) widget.onProductAdded?.call();
   }
 
   @override
   Widget build(BuildContext context) {
     final product = widget.product;
     final scheme = Theme.of(context).colorScheme;
-    final borderColor = product.hasOffer ? scheme.error : (product.sponsored ? scheme.tertiary : scheme.outlineVariant);
+    final compact = widget.size != _ProductCardSize.large;
+    final small = widget.size == _ProductCardSize.small;
+    final scale = switch (widget.size) {
+      _ProductCardSize.large => 1.0,
+      _ProductCardSize.medium => .82,
+      _ProductCardSize.small => .68,
+    };
+    final borderColor = product.hasOffer
+        ? scheme.error
+        : (product.sponsored ? scheme.tertiary : scheme.outlineVariant);
+    final padding = 10.0 * scale;
+    final radius = 14.0 * scale;
+    final nameHeight = switch (widget.size) {
+      _ProductCardSize.large => 42.0,
+      _ProductCardSize.medium => 36.0,
+      _ProductCardSize.small => 31.0,
+    };
+    final priceHeight = switch (widget.size) {
+      _ProductCardSize.large => 42.0,
+      _ProductCardSize.medium => 37.0,
+      _ProductCardSize.small => 33.0,
+    };
     return Card(
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color:borderColor, width:(product.hasOffer||product.sponsored)?2:1)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(radius),
+        side: BorderSide(
+          color: borderColor,
+          width: (product.hasOffer || product.sponsored)
+              ? (small ? 1.2 : 2)
+              : 1,
+        ),
+      ),
       child: InkWell(
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProductDetailPage(product: product, repository: widget.repository, cart: widget.cart))),
+        onTap: _openProduct,
         child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            AspectRatio(aspectRatio:1.15, child:Stack(children:[
-              Positioned.fill(child:Container(decoration:BoxDecoration(color:scheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(14)),child:product.imageUrl==null?const Icon(Icons.image_outlined,size:52):ClipRRect(borderRadius:BorderRadius.circular(14),child:Image.network(widget.repository.api.resolvePublicUrl(product.imageUrl)??product.imageUrl!,fit:BoxFit.contain,errorBuilder:(_,__,___)=>const Icon(Icons.image_not_supported_outlined,size:48))))),
-              if(product.hasOffer) Positioned(left:6,top:6,child:_SkinBadge(text:'OFERTA',color:scheme.error)),
-              if(product.sponsored) Positioned(left:6,bottom:6,child:_SkinBadge(text:'PATROCINADO',color:scheme.tertiary)),
-              Positioned(top:6,right:6,child:Material(color:scheme.surface.withOpacity(.94),shape:const CircleBorder(),child:IconButton(tooltip:_favorite?'Remover dos favoritos':'Favoritar',visualDensity:VisualDensity.compact,onPressed:_changingFavorite?null:_toggleFavorite,icon:_changingFavorite?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):Icon(_favorite?Icons.favorite:Icons.favorite_border,color:_favorite?Colors.redAccent:null))))
-            ])),
-            const SizedBox(height:8),
-            SizedBox(height:42, child:Center(child:Text(product.name,maxLines:2,overflow:TextOverflow.ellipsis,textAlign:TextAlign.center,style:const TextStyle(fontWeight:FontWeight.w800,height:1.15)))),
-            const SizedBox(height:6),
-            SizedBox(height:42, child:Align(alignment:Alignment.centerLeft, child:_ProductPrice(product:product))),
-            const SizedBox(height:4),
-            Align(alignment:Alignment.centerRight,child:IconButton.filledTonal(visualDensity:VisualDensity.compact,onPressed:product.available?()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>ProductDetailPage(product:product,repository:widget.repository,cart:widget.cart))):null,icon:const Icon(Icons.add_shopping_cart,size:19))),
-          ]),
+          padding: EdgeInsets.all(padding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                aspectRatio: compact ? 1.0 : 1.15,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: scheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(radius),
+                        ),
+                        child: product.imageUrl == null
+                            ? Icon(Icons.image_outlined, size: 52 * scale)
+                            : ClipRRect(
+                                borderRadius: BorderRadius.circular(radius),
+                                child: Image.network(
+                                  widget.repository.api.resolvePublicUrl(
+                                        product.imageUrl,
+                                      ) ??
+                                      product.imageUrl!,
+                                  fit: BoxFit.contain,
+                                  cacheWidth: 512,
+                                  errorBuilder: (_, error, ___) {
+                                    return Icon(
+                                      Icons.image_not_supported_outlined,
+                                      size: 48 * scale,
+                                    );
+                                  },
+                                ),
+                              ),
+                      ),
+                    ),
+                    if (product.hasOffer)
+                      Positioned(
+                        left: 4 * scale,
+                        top: 4 * scale,
+                        child: _SkinBadge(
+                          text: 'OFERTA',
+                          color: scheme.error,
+                          scale: scale,
+                        ),
+                      ),
+                    if (product.sponsored)
+                      Positioned(
+                        left: 4 * scale,
+                        bottom: 4 * scale,
+                        child: _SkinBadge(
+                          text: 'PATROCINADO',
+                          color: scheme.tertiary,
+                          scale: scale,
+                        ),
+                      ),
+                    Positioned(
+                      top: 3 * scale,
+                      right: 3 * scale,
+                      child: Material(
+                        color: scheme.surface.withOpacity(.94),
+                        shape: const CircleBorder(),
+                        child: IconButton(
+                          tooltip: _favorite
+                              ? 'Remover dos favoritos'
+                              : 'Favoritar',
+                          visualDensity: VisualDensity.compact,
+                          constraints: BoxConstraints.tightFor(
+                            width: 38 * scale + 4,
+                            height: 38 * scale + 4,
+                          ),
+                          padding: EdgeInsets.all(5 * scale),
+                          onPressed: _changingFavorite ? null : _toggleFavorite,
+                          icon: _changingFavorite
+                              ? SizedBox(
+                                  width: 16 * scale,
+                                  height: 16 * scale,
+                                  child: const CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Icon(
+                                  _favorite
+                                      ? Icons.favorite
+                                      : Icons.favorite_border,
+                                  color: _favorite ? Colors.redAccent : null,
+                                  size: 21 * scale + 2,
+                                ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 8 * scale),
+              SizedBox(
+                height: nameHeight,
+                child: Center(
+                  child: Text(
+                    product.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      height: 1.10,
+                      fontSize: switch (widget.size) {
+                        _ProductCardSize.large => 14,
+                        _ProductCardSize.medium => 12,
+                        _ProductCardSize.small => 10.5,
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(height: 5 * scale),
+              SizedBox(
+                height: priceHeight,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: _ProductPrice(product: product, scale: scale),
+                ),
+              ),
+              SizedBox(height: 3 * scale),
+              Align(
+                alignment: Alignment.centerRight,
+                child: IconButton.filledTonal(
+                  tooltip: 'Adicionar ao carrinho',
+                  visualDensity: VisualDensity.compact,
+                  constraints: BoxConstraints.tightFor(
+                    width: 39 * scale + 4,
+                    height: 39 * scale + 4,
+                  ),
+                  padding: EdgeInsets.all(6 * scale),
+                  onPressed: product.available ? _openProduct : null,
+                  icon: Icon(Icons.add_shopping_cart, size: 19 * scale + 1),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
-
 }
 
-
 class _SkinBadge extends StatelessWidget {
-  const _SkinBadge({
-    required this.text,
-    required this.color,
-  });
+  const _SkinBadge({required this.text, required this.color, this.scale = 1});
 
   final String text;
   final Color color;
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
     final foreground =
         ThemeData.estimateBrightnessForColor(color) == Brightness.dark
-            ? Colors.white
-            : Colors.black87;
+        ? Colors.white
+        : Colors.black87;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: 7 * scale, vertical: 4 * scale),
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(999),
@@ -1819,7 +2568,7 @@ class _SkinBadge extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: foreground,
-          fontSize: 9,
+          fontSize: 9 * scale,
           fontWeight: FontWeight.w900,
           height: 1,
           letterSpacing: .2,
@@ -1830,36 +2579,27 @@ class _SkinBadge extends StatelessWidget {
 }
 
 class _ProductPrice extends StatelessWidget {
-  const _ProductPrice({required this.product});
+  const _ProductPrice({required this.product, this.scale = 1});
   final StoreProduct product;
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    if (product.priceHidden) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.lock_clock_outlined, size: 16, color: scheme.primary),
-          const SizedBox(width: 5),
-          Text('Preço surpresa', style: TextStyle(fontWeight: FontWeight.w900, color: scheme.primary, fontSize: 13)),
-        ],
-      );
-    }
     final emphasizedColor = product.hasOffer ? scheme.error : scheme.onSurface;
     final main = TextStyle(
       fontWeight: FontWeight.w900,
       color: emphasizedColor,
-      fontSize: 18,
+      fontSize: 18 * scale,
       height: 1.0,
     );
     final fullPrice = TextStyle(
-      fontSize: 10.5,
+      fontSize: 10.5 * scale,
       fontWeight: FontWeight.w600,
       color: scheme.onSurfaceVariant,
     );
     final fractionCaption = TextStyle(
-      fontSize: 10,
+      fontSize: 10 * scale,
       fontWeight: FontWeight.w800,
       color: scheme.onSurfaceVariant,
       height: 1.05,
@@ -1882,11 +2622,16 @@ class _ProductPrice extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 3),
+          SizedBox(height: 3 * scale),
           Text(_money(product.fractionPrice!), style: main, maxLines: 1),
           if (label.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(label, style: fractionCaption, maxLines: 1, overflow: TextOverflow.ellipsis),
+            SizedBox(height: 2 * scale),
+            Text(
+              label,
+              style: fractionCaption,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ],
       );
@@ -1899,8 +2644,13 @@ class _ProductPrice extends StatelessWidget {
         children: [
           Text(_money(product.fractionPrice!), style: main, maxLines: 1),
           if (label.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(label, style: fractionCaption, maxLines: 1, overflow: TextOverflow.ellipsis),
+            SizedBox(height: 2 * scale),
+            Text(
+              label,
+              style: fractionCaption,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ],
       );
@@ -1920,8 +2670,72 @@ class _ProductPrice extends StatelessWidget {
   }
 }
 
-class _SortMenu extends StatelessWidget { const _SortMenu({required this.value,required this.onChanged}); final StoreProductSort value; final ValueChanged<StoreProductSort> onChanged; @override Widget build(BuildContext context)=>PopupMenuButton<StoreProductSort>(initialValue:value,tooltip:'Ordenar produtos',onSelected:onChanged,itemBuilder:(_)=>StoreProductSort.values.map((v)=>PopupMenuItem(value:v,child:Row(children:[if(v==value) const Icon(Icons.check,size:18),if(v==value) const SizedBox(width:6),Flexible(child:Text(v.label))]))).toList(),child:Chip(avatar:const Icon(Icons.sort,size:18),label:Text(value==StoreProductSort.standard?'Ordenar':value.label))); }
-ImageProvider<Object>? _sponsoredImageProvider(StoreRepository repository, String? raw) {
+class _CardSizeMenu extends StatelessWidget {
+  const _CardSizeMenu({required this.value, required this.onChanged});
+  final _ProductCardSize value;
+  final ValueChanged<_ProductCardSize> onChanged;
+
+  @override
+  Widget build(BuildContext context) => PopupMenuButton<_ProductCardSize>(
+    initialValue: value,
+    tooltip: 'Tamanho dos produtos',
+    onSelected: onChanged,
+    itemBuilder: (_) => _ProductCardSize.values
+        .map(
+          (v) => PopupMenuItem(
+            value: v,
+            child: Row(
+              children: [
+                Icon(v.icon, size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Text(v.label)),
+                if (v == value) const Icon(Icons.check, size: 18),
+              ],
+            ),
+          ),
+        )
+        .toList(),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: Icon(value.icon, size: 21),
+    ),
+  );
+}
+
+class _SortMenu extends StatelessWidget {
+  const _SortMenu({required this.value, required this.onChanged});
+  final StoreProductSort value;
+  final ValueChanged<StoreProductSort> onChanged;
+  @override
+  Widget build(BuildContext context) => PopupMenuButton<StoreProductSort>(
+    initialValue: value,
+    tooltip: 'Ordenar produtos',
+    onSelected: onChanged,
+    itemBuilder: (_) => StoreProductSort.values
+        .map(
+          (v) => PopupMenuItem(
+            value: v,
+            child: Row(
+              children: [
+                if (v == value) const Icon(Icons.check, size: 18),
+                if (v == value) const SizedBox(width: 6),
+                Flexible(child: Text(v.label)),
+              ],
+            ),
+          ),
+        )
+        .toList(),
+    child: Chip(
+      avatar: const Icon(Icons.sort, size: 18),
+      label: Text(value == StoreProductSort.standard ? 'Ordenar' : value.label),
+    ),
+  );
+}
+
+ImageProvider<Object>? _sponsoredImageProvider(
+  StoreRepository repository,
+  String? raw,
+) {
   final value = (raw ?? '').trim();
   if (value.isEmpty) return null;
   if (value.startsWith('data:image/') && value.contains(';base64,')) {
@@ -1935,8 +2749,10 @@ ImageProvider<Object>? _sponsoredImageProvider(StoreRepository repository, Strin
   return NetworkImage(resolved);
 }
 
-
-List<String> _sponsoredAssetCandidates(StoreSponsoredCampaign campaign, {required bool logo}) {
+List<String> _sponsoredAssetCandidates(
+  StoreSponsoredCampaign campaign, {
+  required bool logo,
+}) {
   final raws = logo
       ? <String?>[
           campaign.sponsorLogoUrl,
@@ -2065,15 +2881,23 @@ class _SponsoredCampaignStyle {
   }
 
   static Color _readable(Color background, Color? preferred) {
-    if (preferred != null && _contrast(background, preferred) >= 4.2) return preferred;
+    if (preferred != null && _contrast(background, preferred) >= 4.2)
+      return preferred;
     final black = Colors.black;
     final white = Colors.white;
-    return _contrast(background, black) >= _contrast(background, white) ? black : white;
+    return _contrast(background, black) >= _contrast(background, white)
+        ? black
+        : white;
   }
 
-  factory _SponsoredCampaignStyle.of(BuildContext context, StoreSponsoredCampaign campaign) {
+  factory _SponsoredCampaignStyle.of(
+    BuildContext context,
+    StoreSponsoredCampaign campaign,
+  ) {
     final scheme = Theme.of(context).colorScheme;
-    final background = AppTheme.parseColor(campaign.backgroundColor) ?? scheme.tertiaryContainer;
+    final background =
+        AppTheme.parseColor(campaign.backgroundColor) ??
+        scheme.tertiaryContainer;
     final accent = AppTheme.parseColor(campaign.accentColor) ?? scheme.tertiary;
     final border = AppTheme.parseColor(campaign.borderColor) ?? accent;
     final preferredText = AppTheme.parseColor(campaign.textColor);
@@ -2090,7 +2914,11 @@ class _SponsoredCampaignStyle {
 }
 
 class _SponsorLogo extends StatelessWidget {
-  const _SponsorLogo({required this.campaign, required this.repository, this.size = 46});
+  const _SponsorLogo({
+    required this.campaign,
+    required this.repository,
+    this.size = 46,
+  });
   final StoreSponsoredCampaign campaign;
   final StoreRepository repository;
   final double size;
@@ -2119,7 +2947,10 @@ class _SponsorLogo extends StatelessWidget {
 }
 
 class _SponsoredOffersHeader extends StatelessWidget {
-  const _SponsoredOffersHeader({required this.campaign, required this.repository});
+  const _SponsoredOffersHeader({
+    required this.campaign,
+    required this.repository,
+  });
   final StoreSponsoredCampaign campaign;
   final StoreRepository repository;
 
@@ -2128,7 +2959,10 @@ class _SponsoredOffersHeader extends StatelessWidget {
     final style = _SponsoredCampaignStyle.of(context, campaign);
     final sponsor = (campaign.sponsorName ?? '').trim();
     final backgroundUrls = _sponsoredBackgroundCandidates(campaign);
-    final hasIdentity = _sponsoredAssetCandidates(campaign, logo: true).isNotEmpty;
+    final hasIdentity = _sponsoredAssetCandidates(
+      campaign,
+      logo: true,
+    ).isNotEmpty;
     return Container(
       decoration: BoxDecoration(
         color: style.background,
@@ -2147,45 +2981,108 @@ class _SponsoredOffersHeader extends StatelessWidget {
               ),
             ),
           if (backgroundUrls.isNotEmpty)
-            Positioned.fill(child: ColoredBox(color: style.background.withOpacity(.32))),
+            Positioned.fill(
+              child: ColoredBox(color: style.background.withOpacity(.32)),
+            ),
           Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _SponsoredHeroVisual(campaign: campaign, repository: repository, height: 158),
-            if (_sponsoredAssetCandidates(campaign, logo: false).isNotEmpty) const SizedBox(height: 10),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (hasIdentity) ...[
-                  _SponsorLogo(campaign: campaign, repository: repository, size: 42),
-                  const SizedBox(width: 10),
-                ],
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('PATROCINADO POR', style: TextStyle(color: style.foreground.withOpacity(.72), fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: .6)),
-                      Text(sponsor.isEmpty ? campaign.name : sponsor, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: style.foreground, fontSize: 16, fontWeight: FontWeight.w900)),
-                      if (sponsor.isNotEmpty && campaign.name.trim().isNotEmpty && campaign.name.trim().toLowerCase() != sponsor.toLowerCase())
-                        Text(campaign.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: style.foreground.withOpacity(.84), fontSize: 11, fontWeight: FontWeight.w700)),
+                _SponsoredHeroVisual(
+                  campaign: campaign,
+                  repository: repository,
+                  height: 158,
+                ),
+                if (_sponsoredAssetCandidates(campaign, logo: false).isNotEmpty)
+                  const SizedBox(height: 10),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (hasIdentity) ...[
+                      _SponsorLogo(
+                        campaign: campaign,
+                        repository: repository,
+                        size: 42,
+                      ),
+                      const SizedBox(width: 10),
                     ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'PATROCINADO POR',
+                            style: TextStyle(
+                              color: style.foreground.withOpacity(.72),
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: .6,
+                            ),
+                          ),
+                          Text(
+                            sponsor.isEmpty ? campaign.name : sponsor,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: style.foreground,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          if (sponsor.isNotEmpty &&
+                              campaign.name.trim().isNotEmpty &&
+                              campaign.name.trim().toLowerCase() !=
+                                  sponsor.toLowerCase())
+                            Text(
+                              campaign.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: style.foreground.withOpacity(.84),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: style.accent.withOpacity(.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        'CONTEÚDO\nPATROCINADO',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: style.accent,
+                          fontSize: 7,
+                          fontWeight: FontWeight.w900,
+                          height: 1.05,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if ((campaign.description ?? '').trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    campaign.description!,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: style.foreground.withOpacity(.86),
+                      fontSize: 12,
+                    ),
                   ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                  decoration: BoxDecoration(color: style.accent.withOpacity(.12), borderRadius: BorderRadius.circular(999)),
-                  child: Text('CONTEÚDO\nPATROCINADO', textAlign: TextAlign.center, style: TextStyle(color: style.accent, fontSize: 7, fontWeight: FontWeight.w900, height: 1.05)),
-                ),
+                ],
               ],
             ),
-            if ((campaign.description ?? '').trim().isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(campaign.description!, maxLines: 3, overflow: TextOverflow.ellipsis, style: TextStyle(color: style.foreground.withOpacity(.86), fontSize: 12)),
-            ],
-          ],
-        ),
           ),
         ],
       ),
@@ -2207,7 +3104,8 @@ class _SponsoredCampaignsBlock extends StatefulWidget {
   final ValueChanged<StoreSponsoredCampaign> onOpenCampaign;
 
   @override
-  State<_SponsoredCampaignsBlock> createState() => _SponsoredCampaignsBlockState();
+  State<_SponsoredCampaignsBlock> createState() =>
+      _SponsoredCampaignsBlockState();
 }
 
 class _SponsoredCampaignsBlockState extends State<_SponsoredCampaignsBlock> {
@@ -2215,7 +3113,11 @@ class _SponsoredCampaignsBlockState extends State<_SponsoredCampaignsBlock> {
 
   @override
   Widget build(BuildContext context) {
-    final safeIndex = _index < 0 ? 0 : (_index >= widget.campaigns.length ? widget.campaigns.length - 1 : _index);
+    final safeIndex = _index < 0
+        ? 0
+        : (_index >= widget.campaigns.length
+              ? widget.campaigns.length - 1
+              : _index);
     final campaign = widget.campaigns[safeIndex];
     final style = _SponsoredCampaignStyle.of(context, campaign);
     final sponsor = (campaign.sponsorName ?? '').trim();
@@ -2241,96 +3143,182 @@ class _SponsoredCampaignsBlockState extends State<_SponsoredCampaignsBlock> {
               ),
             ),
           if (backgroundUrls.isNotEmpty)
-            Positioned.fill(child: ColoredBox(color: style.background.withOpacity(.30))),
-          Padding(
-        padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (hasHero) ...[
-              _SponsoredHeroVisual(campaign: campaign, repository: widget.repository, height: 104),
-              const SizedBox(height: 8),
-            ],
-            Row(
-              children: [
-                if (hasLogo) ...[
-                  _SponsorLogo(campaign: campaign, repository: widget.repository, size: 38),
-                  const SizedBox(width: 8),
-                ],
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('PATROCINADO POR', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: .5, color: style.foreground.withOpacity(.72))),
-                      Text(sponsor.isEmpty ? campaign.name : sponsor, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w900, color: style.foreground)),
-                      if (sponsor.isNotEmpty && campaign.name.trim().isNotEmpty && campaign.name.trim().toLowerCase() != sponsor.toLowerCase())
-                        Text(campaign.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 9.5, color: style.foreground.withOpacity(.80))),
-                    ],
-                  ),
-                ),
-                TextButton(
-                  style: TextButton.styleFrom(
-                    foregroundColor: style.accent,
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 7),
-                  ),
-                  onPressed: campaign.products.isEmpty ? null : () => widget.onOpenCampaign(campaign),
-                  child: const Text('Ver ofertas →'),
-                ),
-                if (widget.campaigns.length > 1)
-                  PopupMenuButton<int>(
-                    tooltip: 'Trocar campanha',
-                    color: Theme.of(context).colorScheme.surface,
-                    onSelected: (value) => setState(() => _index = value),
-                    itemBuilder: (_) => List.generate(widget.campaigns.length, (i) => PopupMenuItem(value: i, child: Text(widget.campaigns[i].name))),
-                    icon: Icon(Icons.more_horiz, color: style.foreground),
-                  ),
-              ],
+            Positioned.fill(
+              child: ColoredBox(color: style.background.withOpacity(.30)),
             ),
-            if (campaign.products.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 132,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: campaign.products.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 7),
-                  itemBuilder: (ctx, i) {
-                    final product = campaign.products[i];
-                    return SizedBox(
-                      width: 104,
-                      child: Card(
-                        color: Theme.of(context).colorScheme.surface,
-                        clipBehavior: Clip.antiAlias,
-                        margin: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: style.border.withOpacity(.45))),
-                        child: InkWell(
-                          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProductDetailPage(product: product, repository: widget.repository, cart: widget.cart))),
-                          child: Padding(
-                            padding: const EdgeInsets.all(5),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Expanded(
-                                  child: product.imageUrl != null
-                                      ? Image.network(widget.repository.api.resolvePublicUrl(product.imageUrl) ?? product.imageUrl!, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.inventory_2_outlined))
-                                      : const Icon(Icons.inventory_2_outlined),
-                                ),
-                                Text(product.name, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, height: 1.05)),
-                                const SizedBox(height: 2),
-                                _SponsoredCompactPrice(product: product, color: style.accent),
-                              ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (hasHero) ...[
+                  _SponsoredHeroVisual(
+                    campaign: campaign,
+                    repository: widget.repository,
+                    height: 104,
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Row(
+                  children: [
+                    if (hasLogo) ...[
+                      _SponsorLogo(
+                        campaign: campaign,
+                        repository: widget.repository,
+                        size: 38,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'PATROCINADO POR',
+                            style: TextStyle(
+                              fontSize: 8,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: .5,
+                              color: style.foreground.withOpacity(.72),
                             ),
                           ),
-                        ),
+                          Text(
+                            sponsor.isEmpty ? campaign.name : sponsor,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w900,
+                              color: style.foreground,
+                            ),
+                          ),
+                          if (sponsor.isNotEmpty &&
+                              campaign.name.trim().isNotEmpty &&
+                              campaign.name.trim().toLowerCase() !=
+                                  sponsor.toLowerCase())
+                            Text(
+                              campaign.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                color: style.foreground.withOpacity(.80),
+                              ),
+                            ),
+                        ],
                       ),
-                    );
-                  },
+                    ),
+                    TextButton(
+                      style: TextButton.styleFrom(
+                        foregroundColor: style.accent,
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 7),
+                      ),
+                      onPressed: campaign.products.isEmpty
+                          ? null
+                          : () => widget.onOpenCampaign(campaign),
+                      child: const Text('Ver ofertas →'),
+                    ),
+                    if (widget.campaigns.length > 1)
+                      PopupMenuButton<int>(
+                        tooltip: 'Trocar campanha',
+                        color: Theme.of(context).colorScheme.surface,
+                        onSelected: (value) => setState(() => _index = value),
+                        itemBuilder: (_) => List.generate(
+                          widget.campaigns.length,
+                          (i) => PopupMenuItem(
+                            value: i,
+                            child: Text(widget.campaigns[i].name),
+                          ),
+                        ),
+                        icon: Icon(Icons.more_horiz, color: style.foreground),
+                      ),
+                  ],
                 ),
-              ),
-            ],
-          ],
-        ),
+                if (campaign.products.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 132,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: campaign.products.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 7),
+                      itemBuilder: (ctx, i) {
+                        final product = campaign.products[i];
+                        return SizedBox(
+                          width: 104,
+                          child: Card(
+                            color: Theme.of(context).colorScheme.surface,
+                            clipBehavior: Clip.antiAlias,
+                            margin: EdgeInsets.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                color: style.border.withOpacity(.45),
+                              ),
+                            ),
+                            child: InkWell(
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => ProductDetailPage(
+                                    product: product,
+                                    repository: widget.repository,
+                                    cart: widget.cart,
+                                  ),
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(5),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      child: product.imageUrl != null
+                                          ? Image.network(
+                                              widget.repository.api
+                                                      .resolvePublicUrl(
+                                                        product.imageUrl,
+                                                      ) ??
+                                                  product.imageUrl!,
+                                              fit: BoxFit.contain,
+                                              errorBuilder: (_, __, ___) =>
+                                                  const Icon(
+                                                    Icons.inventory_2_outlined,
+                                                  ),
+                                            )
+                                          : const Icon(
+                                              Icons.inventory_2_outlined,
+                                            ),
+                                    ),
+                                    Text(
+                                      product.name,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w800,
+                                        height: 1.05,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    _SponsoredCompactPrice(
+                                      product: product,
+                                      color: style.accent,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ],
       ),
@@ -2345,27 +3333,63 @@ class _SponsoredCompactPrice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (product.priceHidden) {
-      return Text('Preço surpresa', textAlign: TextAlign.center, style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w900, color: color));
-    }
     final label = (product.fractionLabel ?? '').trim();
-    if ((product.priceDisplayMode == 'CHEIO_E_MENOR' || product.priceDisplayMode == 'PRECO_MENOR') &&
+    if ((product.priceDisplayMode == 'CHEIO_E_MENOR' ||
+            product.priceDisplayMode == 'PRECO_MENOR') &&
         product.fractionPrice != null) {
       return Column(
         children: [
           if (product.priceDisplayMode == 'CHEIO_E_MENOR')
-            Text('Preço cheio: ${_money(product.price)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 8, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          Text(_money(product.fractionPrice!), textAlign: TextAlign.center, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900, color: color)),
-          if (label.isNotEmpty) Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 7.5, fontWeight: FontWeight.w700)),
+            Text(
+              'Preço cheio: ${_money(product.price)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 8,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          Text(
+            _money(product.fractionPrice!),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+          ),
+          if (label.isNotEmpty)
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 7.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
         ],
       );
     }
-    return Text(_money(product.price), textAlign: TextAlign.center, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900, color: color));
+    return Text(
+      _money(product.price),
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: 10.5,
+        fontWeight: FontWeight.w900,
+        color: color,
+      ),
+    );
   }
 }
 
 class _SponsoredProductGrid extends StatelessWidget {
-  const _SponsoredProductGrid({required this.products, required this.campaign, required this.repository, required this.cart});
+  const _SponsoredProductGrid({
+    required this.products,
+    required this.campaign,
+    required this.repository,
+    required this.cart,
+  });
   final List<StoreProduct> products;
   final StoreSponsoredCampaign campaign;
   final StoreRepository repository;
@@ -2373,20 +3397,37 @@ class _SponsoredProductGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
-        builder: (context, constraints) {
-          final cols = constraints.maxWidth >= 760 ? 4 : 2;
-          final width = (constraints.maxWidth - ((cols - 1) * 10)) / cols;
-          return Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: products.map((p) => SizedBox(width: width, child: _SponsoredProductCard(product: p, campaign: campaign, repository: repository, cart: cart))).toList(),
-          );
-        },
+    builder: (context, constraints) {
+      final cols = constraints.maxWidth >= 760 ? 4 : 2;
+      final width = (constraints.maxWidth - ((cols - 1) * 10)) / cols;
+      return Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: products
+            .map(
+              (p) => SizedBox(
+                width: width,
+                child: _SponsoredProductCard(
+                  product: p,
+                  campaign: campaign,
+                  repository: repository,
+                  cart: cart,
+                ),
+              ),
+            )
+            .toList(),
       );
+    },
+  );
 }
 
 class _SponsoredProductCard extends StatelessWidget {
-  const _SponsoredProductCard({required this.product, required this.campaign, required this.repository, required this.cart});
+  const _SponsoredProductCard({
+    required this.product,
+    required this.campaign,
+    required this.repository,
+    required this.cart,
+  });
   final StoreProduct product;
   final StoreSponsoredCampaign campaign;
   final StoreRepository repository;
@@ -2399,33 +3440,188 @@ class _SponsoredProductCard extends StatelessWidget {
     return Card(
       clipBehavior: Clip.antiAlias,
       color: scheme.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: style.border, width: 2)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: style.border, width: 2),
+      ),
       child: InkWell(
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProductDetailPage(product: product, repository: repository, cart: cart))),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ProductDetailPage(
+              product: product,
+              repository: repository,
+              cart: cart,
+            ),
+          ),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(10),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            AspectRatio(
-              aspectRatio: 1.15,
-              child: Stack(children: [
-                Positioned.fill(child: Container(decoration: BoxDecoration(color: style.background.withOpacity(.22), borderRadius: BorderRadius.circular(14)), child: product.imageUrl == null ? const Icon(Icons.image_outlined, size: 52) : ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.network(repository.api.resolvePublicUrl(product.imageUrl) ?? product.imageUrl!, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported_outlined, size: 48))))),
-                Positioned(left: 6, top: 6, child: _SkinBadge(text: 'PATROCINADO', color: style.accent)),
-              ]),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(height: 42, child: Center(child: Text(product.name, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w800, height: 1.15)))),
-            const SizedBox(height: 6),
-            SizedBox(height: 42, child: Align(alignment: Alignment.centerLeft, child: _ProductPrice(product: product))),
-            const SizedBox(height: 4),
-            SizedBox(width: double.infinity, child: FilledButton.tonalIcon(onPressed: product.available ? () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProductDetailPage(product: product, repository: repository, cart: cart))) : null, icon: const Icon(Icons.add_shopping_cart, size: 18), label: const Text('Adicionar'))),
-          ]),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                aspectRatio: 1.15,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: style.background.withOpacity(.22),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: product.imageUrl == null
+                            ? const Icon(Icons.image_outlined, size: 52)
+                            : ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: Image.network(
+                                  repository.api.resolvePublicUrl(
+                                        product.imageUrl,
+                                      ) ??
+                                      product.imageUrl!,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, __, ___) => const Icon(
+                                    Icons.image_not_supported_outlined,
+                                    size: 48,
+                                  ),
+                                ),
+                              ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 6,
+                      top: 6,
+                      child: _SkinBadge(
+                        text: 'PATROCINADO',
+                        color: style.accent,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 42,
+                child: Center(
+                  child: Text(
+                    product.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              SizedBox(
+                height: 42,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: _ProductPrice(product: product),
+                ),
+              ),
+              const SizedBox(height: 4),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.tonalIcon(
+                  onPressed: product.available
+                      ? () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ProductDetailPage(
+                              product: product,
+                              repository: repository,
+                              cart: cart,
+                            ),
+                          ),
+                        )
+                      : null,
+                  icon: const Icon(Icons.add_shopping_cart, size: 18),
+                  label: const Text('Adicionar'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _SponsoredStrip extends StatelessWidget { const _SponsoredStrip({required this.products,required this.repository,required this.cart}); final List<StoreProduct> products; final StoreRepository repository; final CartController cart; @override Widget build(BuildContext context){final p=products.first;return Card(clipBehavior:Clip.antiAlias,color:Theme.of(context).colorScheme.tertiaryContainer,child:InkWell(onTap:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>ProductDetailPage(product:p,repository:repository,cart:cart))),child:SizedBox(height:82,child:Row(children:[const SizedBox(width:12),Icon(Icons.campaign_outlined,color:Theme.of(context).colorScheme.tertiary,size:34),const SizedBox(width:12),Expanded(child:Column(mainAxisAlignment:MainAxisAlignment.center,crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('Patrocinado',style:TextStyle(fontWeight:FontWeight.w900,fontSize:12)),Text(p.name,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w800)),Text(_money(p.price),style:TextStyle(fontWeight:FontWeight.w900,color:Theme.of(context).colorScheme.primary))])),const Icon(Icons.chevron_right),const SizedBox(width:10)])))) ;} }
+class _SponsoredStrip extends StatelessWidget {
+  const _SponsoredStrip({
+    required this.products,
+    required this.repository,
+    required this.cart,
+  });
+  final List<StoreProduct> products;
+  final StoreRepository repository;
+  final CartController cart;
+  @override
+  Widget build(BuildContext context) {
+    final p = products.first;
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      color: Theme.of(context).colorScheme.tertiaryContainer,
+      child: InkWell(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ProductDetailPage(
+              product: p,
+              repository: repository,
+              cart: cart,
+            ),
+          ),
+        ),
+        child: SizedBox(
+          height: 82,
+          child: Row(
+            children: [
+              const SizedBox(width: 12),
+              Icon(
+                Icons.campaign_outlined,
+                color: Theme.of(context).colorScheme.tertiary,
+                size: 34,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Patrocinado',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                      ),
+                    ),
+                    Text(
+                      p.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    Text(
+                      _money(p.price),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right),
+              const SizedBox(width: 10),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _BannerCarousel extends StatefulWidget {
   const _BannerCarousel({required this.banners});
@@ -2496,7 +3692,10 @@ class _BannerCarouselState extends State<_BannerCarousel> {
                     banner.imageUrl!,
                     fit: BoxFit.cover,
                     width: double.infinity,
-                    errorBuilder: (_, __, ___) => _BannerFallback(title: banner.title),
+                    cacheWidth: 1080,
+                    errorBuilder: (_, error, ___) {
+                      return _BannerFallback(title: banner.title);
+                    },
                   );
                 }
                 return _BannerFallback(title: banner.title);
@@ -2536,21 +3735,25 @@ class _BannerFallback extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Theme.of(context).colorScheme.primary,
-              Theme.of(context).colorScheme.primaryContainer,
-            ],
-          ),
-        ),
-        child: Text(
-          title,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20),
-        ),
-      );
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [
+          Theme.of(context).colorScheme.primary,
+          Theme.of(context).colorScheme.primaryContainer,
+        ],
+      ),
+    ),
+    child: Text(
+      title,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.w900,
+        fontSize: 20,
+      ),
+    ),
+  );
 }
 
 class _CategoryChip extends StatelessWidget {
@@ -2560,59 +3763,65 @@ class _CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: 154,
-        child: Material(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(16),
-          child: InkWell(
-            onTap: onTap,
+    width: 154,
+    child: Material(
+      color: Theme.of(context).colorScheme.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(9),
+          decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            child: Container(
-              padding: const EdgeInsets.all(9),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    clipBehavior: Clip.antiAlias,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(13),
-                    ),
-                    child: category.imageUrl != null && category.imageUrl!.isNotEmpty
-                        ? Image.network(
-                            category.imageUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Icon(
-                              Icons.grid_view_rounded,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                          )
-                        : Icon(
-                            Icons.grid_view_rounded,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      category.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right, size: 18),
-                ],
-              ),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant,
             ),
           ),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child:
+                    category.imageUrl != null && category.imageUrl!.isNotEmpty
+                    ? Image.network(
+                        category.imageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Icon(
+                          Icons.grid_view_rounded,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      )
+                    : Icon(
+                        Icons.grid_view_rounded,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  category.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const Icon(Icons.chevron_right, size: 18),
+            ],
+          ),
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _SectionTitle extends StatelessWidget {
@@ -2621,9 +3830,11 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-        title,
-        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-      );
+    title,
+    style: Theme.of(
+      context,
+    ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+  );
 }
 
 class _ApiMissingCard extends StatelessWidget {
@@ -2633,26 +3844,45 @@ class _ApiMissingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            children: [
-              Icon(Icons.storefront_outlined, size: 50, color: Theme.of(context).colorScheme.primary),
-              const SizedBox(height: 10),
-              const Text('Loja Mobile', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 8),
-              Text(message, textAlign: TextAlign.center),
-              const SizedBox(height: 14),
-              OutlinedButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('Tentar novamente')),
-            ],
+    child: Padding(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        children: [
+          Icon(
+            Icons.storefront_outlined,
+            size: 50,
+            color: Theme.of(context).colorScheme.primary,
           ),
-        ),
-      );
+          const SizedBox(height: 10),
+          const Text(
+            'Loja Mobile',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          Text(message, textAlign: TextAlign.center),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Tentar novamente'),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
-String _money(double value) => 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
+String _money(double value) =>
+    'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
 String _unitSuffix(String? unit) {
   final u = (unit ?? 'UN').toUpperCase();
   return ['UN', 'UND', 'UNID', 'UNIDADE'].contains(u) ? 'cada' : 'por $u';
 }
-String _qty(double value) => value == value.roundToDouble() ? value.toInt().toString() : value.toStringAsFixed(3).replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '').replaceAll('.', ',');
+
+String _qty(double value) => value == value.roundToDouble()
+    ? value.toInt().toString()
+    : value
+          .toStringAsFixed(3)
+          .replaceFirst(RegExp(r'0+$'), '')
+          .replaceFirst(RegExp(r'\.$'), '')
+          .replaceAll('.', ',');

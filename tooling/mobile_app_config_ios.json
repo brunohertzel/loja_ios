@@ -1,0 +1,18 @@
+{
+  "schema": 4,
+  "branding_synced": true,
+  "app_name": "Dom Levi",
+  "api_base_url": "https://domlevi.com.br/api/mobile/v1",
+  "ios_bundle_id": "br.com.softsistemas.domlevi",
+  "theme_default": "SYSTEM",
+  "primary_color": "#1A73E8",
+  "secondary_color": "#202124",
+  "logo_url": "https://domlevi.com.br/uploads/mobile/logo_20261002_141919_077f62.png",
+  "splash_url": "https://domlevi.com.br/uploads/mobile/splash_20261002_141919_91badb.png",
+  "icon_ios_url": "",
+  "release": {
+    "module_version": "1.13.0",
+    "current_version": "",
+    "current_build": ""
+  }
+}

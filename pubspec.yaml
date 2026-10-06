@@ -1,7 +1,7 @@
 name: soft_ecommerce_mobile
-description: Soft Ecommerce Mobile - loja Android e iOS para clientes do ecommerce.
+description: Soft Ecommerce Mobile - loja Android/iOS para clientes do ecommerce.
 publish_to: 'none'
-version: 1.6.20+178
+version: 1.6.28+186
 
 environment:
   sdk: '>=3.6.0 <4.0.0'
@@ -20,6 +20,7 @@ dependencies:
   google_sign_in: ^6.3.0
   pay: ^3.3.0
   image_picker: ^1.1.2
+  mobile_scanner: ^6.0.11
   url_launcher: ^6.3.1
   flutter_widget_from_html_core: ^0.16.1
 

@@ -1,8 +1,8 @@
+import 'core/config/platform_info.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/config/generated_app_config.dart';
-import 'core/config/platform_info.dart';
 import 'core/device/device_service.dart';
 import 'core/models/bootstrap_config.dart';
 import 'core/network/api_client.dart';
@@ -59,21 +59,27 @@ class _SoftEcommerceAppState extends State<SoftEcommerceApp> {
       final bootstrapJson = await _api.bootstrap();
       final bootstrap = AppBootstrap.fromJson(bootstrapJson);
       _bootstrap = bootstrap;
-      await AppThemeModeController.instance.load(localDefault: GeneratedAppConfig.themeDefault);
+      await AppThemeModeController.instance.load(
+        localDefault: GeneratedAppConfig.themeDefault,
+      );
 
-      // O splash/branding vem do modulo Mobile. Cada plataforma mostra um splash
+      // O splash/branding vem do modulo Mobile. O Android mostra um splash
       // nativo antes do Flutter; assim que o bootstrap chega, exibimos a
-      // imagem configurada no modulo (splash -> logo -> icone da plataforma).
+      // imagem configurada no modulo (splash -> logo -> icone Android).
       if (mounted) setState(() {});
       final startupImage = _firstNonEmpty([
         GeneratedAppConfig.splashUrl,
         GeneratedAppConfig.logoUrl,
-        PlatformInfo.isIOS ? GeneratedAppConfig.iconIosUrl : GeneratedAppConfig.iconAndroidUrl,
+        PlatformInfo.isIOS
+            ? GeneratedAppConfig.iconIosUrl
+            : GeneratedAppConfig.iconAndroidUrl,
       ]);
       if (startupImage != null && startupImage.isNotEmpty && mounted) {
         try {
-          await precacheImage(NetworkImage(startupImage), context)
-              .timeout(const Duration(seconds: 3));
+          await precacheImage(
+            NetworkImage(startupImage),
+            context,
+          ).timeout(const Duration(seconds: 3));
         } catch (_) {
           // Se a imagem estiver indisponivel, a inicializacao continua.
         }
@@ -81,8 +87,10 @@ class _SoftEcommerceAppState extends State<SoftEcommerceApp> {
       }
 
       if (!bootstrap.platformAllowed) {
-        final platformLicensed = PlatformInfo.isIOS ? bootstrap.iosLicensed : bootstrap.androidLicensed;
-        _message = platformLicensed
+        _message =
+            (PlatformInfo.isIOS
+                ? bootstrap.iosLicensed
+                : bootstrap.androidLicensed)
             ? '${PlatformInfo.label} está licenciado, mas foi desabilitado no configurador do módulo Mobile.'
             : '${PlatformInfo.label} não está incluído na licença do módulo Soft Ecommerce Mobile.';
         _state = _AppState.blocked;
@@ -93,7 +101,8 @@ class _SoftEcommerceAppState extends State<SoftEcommerceApp> {
       if (bootstrap.app.forceUpdate &&
           minVersion != null &&
           VersionUtils.isLowerThan(_device.appVersion, minVersion)) {
-        _message = 'Esta versão do aplicativo precisa ser atualizada. Versão mínima: $minVersion.';
+        _message =
+            'Esta versão do aplicativo precisa ser atualizada. Versão mínima: $minVersion.';
         _state = _AppState.updateRequired;
         return;
       }
@@ -118,10 +127,9 @@ class _SoftEcommerceAppState extends State<SoftEcommerceApp> {
   Future<void> _authenticated() async {
     if (!mounted) return;
     setState(() => _state = _AppState.store);
-    await _auth.event(
-      'app_open',
-      <String, dynamic>{'package': _device.packageName},
-    );
+    await _auth.event('app_open', <String, dynamic>{
+      'package': _device.packageName,
+    });
   }
 
   @override
@@ -133,59 +141,62 @@ class _SoftEcommerceAppState extends State<SoftEcommerceApp> {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: AppThemeModeController.instance,
       builder: (context, themeMode, _) => MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: GeneratedAppConfig.appName,
-      theme: AppTheme.lightFromHex(primary, secondary),
-      darkTheme: AppTheme.darkFromHex(primary, secondary),
-      themeMode: themeMode,
-      locale: const Locale('pt', 'BR'),
-      supportedLocales: const [Locale('pt', 'BR')],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      home: switch (_state) {
-        _AppState.loading => _LoadingPage(bootstrap: bootstrap),
-        _AppState.authentication => bootstrap == null
-            ? _LoadingPage(bootstrap: bootstrap)
-            : LoginPage(
-                api: _api,
-                auth: _auth,
-                store: _store,
-                biometrics: _biometrics,
-                bootstrap: bootstrap,
-                autoTryBiometric: true,
-                onLoggedIn: _authenticated,
-              ),
-        _AppState.store => bootstrap == null
-            ? _LoadingPage(bootstrap: bootstrap)
-            : StoreShell(
-                api: _api,
-                auth: _auth,
-                store: _store,
-                biometrics: _biometrics,
-                bootstrap: bootstrap,
-                onLoggedOut: () {
-                  if (mounted) setState(() => _state = _AppState.authentication);
-                },
-              ),
-        _AppState.blocked => _MessagePage(
+        debugShowCheckedModeBanner: false,
+        title: GeneratedAppConfig.appName,
+        theme: AppTheme.lightFromHex(primary, secondary),
+        darkTheme: AppTheme.darkFromHex(primary, secondary),
+        themeMode: themeMode,
+        locale: const Locale('pt', 'BR'),
+        supportedLocales: const [Locale('pt', 'BR')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: switch (_state) {
+          _AppState.loading => _LoadingPage(bootstrap: bootstrap),
+          _AppState.authentication =>
+            bootstrap == null
+                ? _LoadingPage(bootstrap: bootstrap)
+                : LoginPage(
+                    api: _api,
+                    auth: _auth,
+                    store: _store,
+                    biometrics: _biometrics,
+                    bootstrap: bootstrap,
+                    autoTryBiometric: true,
+                    onLoggedIn: _authenticated,
+                  ),
+          _AppState.store =>
+            bootstrap == null
+                ? _LoadingPage(bootstrap: bootstrap)
+                : StoreShell(
+                    api: _api,
+                    auth: _auth,
+                    store: _store,
+                    biometrics: _biometrics,
+                    bootstrap: bootstrap,
+                    onLoggedOut: () {
+                      if (mounted)
+                        setState(() => _state = _AppState.authentication);
+                    },
+                  ),
+          _AppState.blocked => _MessagePage(
             icon: Icons.cloud_off,
             title: 'Não foi possível iniciar',
             message: _message ?? 'Falha desconhecida.',
             buttonLabel: 'Tentar novamente',
             onPressed: _initialize,
           ),
-        _AppState.updateRequired => _MessagePage(
+          _AppState.updateRequired => _MessagePage(
             icon: Icons.system_update,
             title: 'Atualização obrigatória',
             message: _message ?? 'Atualize o aplicativo para continuar.',
             buttonLabel: 'Verificar novamente',
             onPressed: _initialize,
           ),
-      },
-    ),
+        },
+      ),
     );
   }
 }
@@ -208,7 +219,9 @@ class _LoadingPage extends StatelessWidget {
     final imageUrl = _firstNonEmpty([
       GeneratedAppConfig.splashUrl,
       GeneratedAppConfig.logoUrl,
-      GeneratedAppConfig.iconAndroidUrl,
+      PlatformInfo.isIOS
+          ? GeneratedAppConfig.iconIosUrl
+          : GeneratedAppConfig.iconAndroidUrl,
     ]);
 
     return Scaffold(
@@ -220,7 +233,10 @@ class _LoadingPage extends StatelessWidget {
             Center(
               child: imageUrl != null && imageUrl.isNotEmpty
                   ? Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 42, vertical: 70),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 42,
+                        vertical: 70,
+                      ),
                       child: Image.network(
                         imageUrl,
                         fit: BoxFit.contain,
@@ -229,19 +245,18 @@ class _LoadingPage extends StatelessWidget {
                     )
                   : const SizedBox.shrink(),
             ),
-            if (bootstrap != null)
-              const Positioned(
-                left: 0,
-                right: 0,
-                bottom: 34,
-                child: Center(
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+            const Positioned(
+              left: 0,
+              right: 0,
+              bottom: 34,
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
+            ),
           ],
         ),
       ),
@@ -265,29 +280,39 @@ class _MessagePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        body: SafeArea(
-          child: Center(
+    body: SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Card(
             child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(26),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(icon, size: 58, color: Theme.of(context).colorScheme.primary),
-                      const SizedBox(height: 16),
-                      Text(title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-                      const SizedBox(height: 10),
-                      Text(message, textAlign: TextAlign.center),
-                      const SizedBox(height: 20),
-                      FilledButton(onPressed: onPressed, child: Text(buttonLabel)),
-                    ],
+              padding: const EdgeInsets.all(26),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    icon,
+                    size: 58,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(message, textAlign: TextAlign.center),
+                  const SizedBox(height: 20),
+                  FilledButton(onPressed: onPressed, child: Text(buttonLabel)),
+                ],
               ),
             ),
           ),
         ),
-      );
+      ),
+    ),
+  );
 }

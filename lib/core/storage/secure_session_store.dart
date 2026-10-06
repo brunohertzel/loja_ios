@@ -14,7 +14,8 @@ class SecureSessionStore {
   Future<String?> get accessToken => _storage.read(key: _access);
   Future<String?> get refreshToken => _storage.read(key: _refresh);
   Future<String?> get customerName => _storage.read(key: _customerName);
-  Future<String?> get rememberedIdentifier => _storage.read(key: _loginIdentifier);
+  Future<String?> get rememberedIdentifier =>
+      _storage.read(key: _loginIdentifier);
   Future<String?> get deviceId => _storage.read(key: _deviceId);
 
   Future<bool> get rememberMe async =>

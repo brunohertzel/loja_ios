@@ -18,24 +18,19 @@ class AuthRepository {
     required String password,
     required bool rememberMe,
   }) async {
-    final json = await api.post(
-      '/auth/login.php',
-      <String, dynamic>{
-        'identifier': identifier,
-        'password': password,
-        'remember_me': rememberMe,
-        'device_id': device.deviceId,
-        'app_version': device.appVersion,
-        'app_build': device.appBuild,
-      },
-      authenticated: false,
-    );
+    final json = await api.post('/auth/login.php', <String, dynamic>{
+      'identifier': identifier,
+      'password': password,
+      'remember_me': rememberMe,
+      'device_id': device.deviceId,
+      'app_version': device.appVersion,
+      'app_build': device.appBuild,
+    }, authenticated: false);
 
     await _saveAuthResponse(json, rememberMe: rememberMe);
     await store.setRememberedIdentifier(rememberMe ? identifier : null);
     return json;
   }
-
 
   Future<Map<String, dynamic>> register({
     required String name,
@@ -46,21 +41,17 @@ class AuthRepository {
     required bool rememberMe,
     required Map<String, String> address,
   }) async {
-    final json = await api.post(
-      '/auth/register.php',
-      <String, dynamic>{
-        'name': name,
-        'document': document,
-        'email': email,
-        'phone': phone,
-        'password': password,
-        'remember_me': rememberMe,
-        'device_id': device.deviceId,
-        'address': address,
-        'accept_terms': true,
-      },
-      authenticated: false,
-    );
+    final json = await api.post('/auth/register.php', <String, dynamic>{
+      'name': name,
+      'document': document,
+      'email': email,
+      'phone': phone,
+      'password': password,
+      'remember_me': rememberMe,
+      'device_id': device.deviceId,
+      'address': address,
+      'accept_terms': true,
+    }, authenticated: false);
     await _saveAuthResponse(json, rememberMe: rememberMe);
     await store.setRememberedIdentifier(rememberMe ? email : null);
     return json;
@@ -71,17 +62,13 @@ class AuthRepository {
     required bool rememberMe,
     Map<String, String>? registration,
   }) async {
-    final json = await api.post(
-      '/auth/google.php',
-      <String, dynamic>{
-        'id_token': idToken,
-        'remember_me': rememberMe,
-        'device_id': device.deviceId,
-        if (registration != null) 'registration': registration,
-        if (registration != null) 'accept_terms': true,
-      },
-      authenticated: false,
-    );
+    final json = await api.post('/auth/google.php', <String, dynamic>{
+      'id_token': idToken,
+      'remember_me': rememberMe,
+      'device_id': device.deviceId,
+      if (registration != null) 'registration': registration,
+      if (registration != null) 'accept_terms': true,
+    }, authenticated: false);
     await _saveAuthResponse(json, rememberMe: rememberMe);
     return json;
   }
@@ -99,21 +86,27 @@ class AuthRepository {
     );
   }
 
-  Future<bool> refresh() async {
+  Future<bool>? _refreshInFlight;
+
+  Future<bool> refresh() {
+    final running = _refreshInFlight;
+    if (running != null) return running;
+    final future = _refreshTokens().whenComplete(() => _refreshInFlight = null);
+    _refreshInFlight = future;
+    return future;
+  }
+
+  Future<bool> _refreshTokens() async {
     final refreshToken = (await store.refreshToken)?.trim() ?? '';
     if (refreshToken.isEmpty) return false;
 
     try {
-      final json = await api.post(
-        '/auth/refresh.php',
-        <String, dynamic>{
-          'refresh_token': refreshToken,
-          'device_id': device.deviceId,
-          'app_version': device.appVersion,
-          'app_build': device.appBuild,
-        },
-        authenticated: false,
-      );
+      final json = await api.post('/auth/refresh.php', <String, dynamic>{
+        'refresh_token': refreshToken,
+        'device_id': device.deviceId,
+        'app_version': device.appVersion,
+        'app_build': device.appBuild,
+      }, authenticated: false);
       await store.updateTokens(
         accessToken: json['access_token']?.toString() ?? '',
         refreshToken: json['refresh_token']?.toString() ?? '',
@@ -176,11 +169,10 @@ class AuthRepository {
   ]) async {
     try {
       final token = await store.accessToken;
-      await api.post(
-        '/metrics/event.php',
-        <String, dynamic>{'event': event, 'payload': payload},
-        authenticated: token != null && token.isNotEmpty,
-      );
+      await api.post('/metrics/event.php', <String, dynamic>{
+        'event': event,
+        'payload': payload,
+      }, authenticated: token != null && token.isNotEmpty);
     } catch (_) {
       // Telemetria nunca deve bloquear a experiencia do cliente.
     }
@@ -189,17 +181,14 @@ class AuthRepository {
   Future<void> logout() async {
     final refreshToken = await store.refreshToken;
     try {
-      await api.post(
-        '/auth/logout.php',
-        <String, dynamic>{'refresh_token': refreshToken},
-      );
+      await api.post('/auth/logout.php', <String, dynamic>{
+        'refresh_token': refreshToken,
+      });
     } catch (_) {
       try {
-        await api.post(
-          '/auth/logout.php',
-          <String, dynamic>{'refresh_token': refreshToken},
-          authenticated: false,
-        );
+        await api.post('/auth/logout.php', <String, dynamic>{
+          'refresh_token': refreshToken,
+        }, authenticated: false);
       } catch (_) {}
     }
     await store.clearSession();

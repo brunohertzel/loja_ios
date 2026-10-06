@@ -14,6 +14,8 @@ class VersionUtils {
 
   static List<int> _parts(String value) => value
       .split('.')
-      .map((part) => int.tryParse(part.replaceAll(RegExp(r'[^0-9].*$'), '')) ?? 0)
+      .map(
+        (part) => int.tryParse(part.replaceAll(RegExp(r'[^0-9].*$'), '')) ?? 0,
+      )
       .toList();
 }

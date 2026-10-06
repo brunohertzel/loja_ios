@@ -52,7 +52,9 @@ Future<void> _download(String url, String destination) async {
   }
 }
 
-Future<List<int>> consolidateHttpClientResponseBytes(HttpClientResponse response) async {
+Future<List<int>> consolidateHttpClientResponseBytes(
+  HttpClientResponse response,
+) async {
   final chunks = <List<int>>[];
   var length = 0;
   await for (final chunk in response) {
@@ -70,7 +72,9 @@ Future<List<int>> consolidateHttpClientResponseBytes(HttpClientResponse response
 
 Future<void> main(List<String> args) async {
   if (args.isEmpty || args.first.trim().isEmpty) {
-    stderr.writeln('Uso: dart run tooling/sync_ios_branding.dart <API_BASE_URL>');
+    stderr.writeln(
+      'Uso: dart run tooling/sync_ios_branding.dart <API_BASE_URL>',
+    );
     exit(2);
   }
 
@@ -82,22 +86,25 @@ Future<void> main(List<String> args) async {
     final req = await client.getUrl(uri);
     req.headers.set('Accept', 'application/json');
     req.headers.set('X-Soft-Platform', 'IOS');
-    req.headers.set('X-Soft-App-Version', '1.6.20');
-    req.headers.set('X-Soft-Build', '178');
+    req.headers.set('X-Soft-App-Version', '1.6.28');
+    req.headers.set('X-Soft-App-Build', '186');
     final res = await req.close();
     final text = await utf8.decoder.bind(res).join();
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw HttpException('Bootstrap HTTP ${res.statusCode}: $text', uri: uri);
     }
     final decoded = jsonDecode(text);
-    if (decoded is! Map) throw const FormatException('JSON do bootstrap invalido.');
+    if (decoded is! Map)
+      throw const FormatException('JSON do bootstrap invalido.');
     boot = decoded.map((k, v) => MapEntry(k.toString(), v));
   } finally {
     client.close(force: true);
   }
 
   if (!_b(boot['platform_allowed'])) {
-    throw StateError('iOS nao esta liberado para este cliente/licenca no modulo Mobile. Habilite iOS no Admin > Mobile > iOS.');
+    throw StateError(
+      'iOS nao esta liberado para este cliente/licenca no modulo Mobile. Habilite iOS no Admin > Mobile > iOS.',
+    );
   }
 
   final app = _m(boot['app']);
@@ -106,7 +113,9 @@ Future<void> main(List<String> args) async {
   final appName = _s(app['name'], 'Soft Ecommerce');
   final bundleId = _s(app['package_id']);
   if (bundleId.isEmpty) {
-    throw StateError('Bundle ID iOS vazio. Configure em Admin > Mobile > iOS antes de compilar.');
+    throw StateError(
+      'Bundle ID iOS vazio. Configure em Admin > Mobile > iOS antes de compilar.',
+    );
   }
 
   final iconIos = _s(app['icon_ios_url'], _s(app['logo_url']));
@@ -126,9 +135,7 @@ Future<void> main(List<String> args) async {
     'splash_url': _s(app['splash_url']),
     'icon_ios_url': iconIos,
     'google_web_client_id': _s(security['google_web_client_id']),
-    'apple_pay': <String, dynamic>{
-      'enabled': _b(payments['apple_pay']),
-    },
+    'apple_pay': <String, dynamic>{'enabled': _b(payments['apple_pay'])},
     'release': <String, dynamic>{
       'module_version': _s(boot['module_version']),
       'current_version': _s(app['current_version']),
@@ -139,8 +146,12 @@ Future<void> main(List<String> args) async {
     },
   };
 
-  await _writeText('tooling/mobile_app_config_ios.json', const JsonEncoder.withIndent('  ').convert(cfg));
-  final generated = '''// Gerado por tooling/sync_ios_branding.dart. Nao editar manualmente.\nclass GeneratedAppConfig {\n  static const int schema = 4;\n  static const String appName = '${_dart(appName)}';\n  static const String apiBaseUrl = '${_dart(api)}';\n  static const String androidPackageId = '';\n  static const String iosBundleId = '${_dart(bundleId)}';\n  static const String themeDefault = '${_dart(_s(app['theme_default'], 'SYSTEM').toUpperCase())}';\n  static const String primaryColor = '${_dart(_s(app['primary_color'], '#1A73E8'))}';\n  static const String secondaryColor = '${_dart(_s(app['secondary_color'], '#202124'))}';\n  static const String logoUrl = '${_dart(_s(app['logo_url']))}';\n  static const String splashUrl = '${_dart(_s(app['splash_url']))}';\n  static const String iconAndroidUrl = '';\n  static const String iconIosUrl = '${_dart(iconIos)}';\n  static const String googleWebClientId = '${_dart(_s(security['google_web_client_id']))}';\n  static const bool googlePayEnabled = false;\n  static const String googlePayEnvironment = 'TEST';\n  static const String googlePayMerchantId = '';\n  static const String googlePayMerchantName = '';\n  static const String releaseModuleVersion = '${_dart(_s(boot['module_version']))}';\n  static const String releaseCurrentVersion = '${_dart(_s(app['current_version']))}';\n  static const String releaseCurrentBuild = '${_dart(_s(app['current_build']))}';\n  static const String releaseMinVersion = '${_dart(_s(app['min_version']))}';\n  static const bool releaseForceUpdate = ${_b(app['force_update'])};\n  static const String releaseStoreUrl = '${_dart(_s(app['store_url']))}';\n  static const String buildGeneratedAt = '${_dart(buildAt)}';\n}\n''';
+  await _writeText(
+    'tooling/mobile_app_config_ios.json',
+    const JsonEncoder.withIndent('  ').convert(cfg),
+  );
+  final generated =
+      '''// Gerado por tooling/sync_ios_branding.dart. Nao editar manualmente.\nclass GeneratedAppConfig {\n  static const int schema = 4;\n  static const String appName = '${_dart(appName)}';\n  static const String apiBaseUrl = '${_dart(api)}';\n  static const String androidPackageId = '';\n  static const String iosBundleId = '${_dart(bundleId)}';\n  static const String themeDefault = '${_dart(_s(app['theme_default'], 'SYSTEM').toUpperCase())}';\n  static const String primaryColor = '${_dart(_s(app['primary_color'], '#1A73E8'))}';\n  static const String secondaryColor = '${_dart(_s(app['secondary_color'], '#202124'))}';\n  static const String logoUrl = '${_dart(_s(app['logo_url']))}';\n  static const String splashUrl = '${_dart(_s(app['splash_url']))}';\n  static const String iconAndroidUrl = '';\n  static const String iconIosUrl = '${_dart(iconIos)}';\n  static const String googleWebClientId = '${_dart(_s(security['google_web_client_id']))}';\n  static const bool googlePayEnabled = false;\n  static const String googlePayEnvironment = 'TEST';\n  static const String googlePayMerchantId = '';\n  static const String googlePayMerchantName = '';\n  static const String releaseModuleVersion = '${_dart(_s(boot['module_version']))}';\n  static const String releaseCurrentVersion = '${_dart(_s(app['current_version']))}';\n  static const String releaseCurrentBuild = '${_dart(_s(app['current_build']))}';\n  static const String releaseMinVersion = '${_dart(_s(app['min_version']))}';\n  static const bool releaseForceUpdate = ${_b(app['force_update'])};\n  static const String releaseStoreUrl = '${_dart(_s(app['store_url']))}';\n  static const String buildGeneratedAt = '${_dart(buildAt)}';\n}\n''';
   await _writeText('lib/core/config/generated_app_config.dart', generated);
 
   final syncDir = Directory('tooling/.ios_sync');
@@ -150,7 +161,10 @@ Future<void> main(List<String> args) async {
   await _writeText('${syncDir.path}/api_url', api);
   await _writeText('${syncDir.path}/icon_url', iconIos);
   await _writeText('${syncDir.path}/build_at', buildAt);
-  await _writeText('${syncDir.path}/current_version', _s(app['current_version']));
+  await _writeText(
+    '${syncDir.path}/current_version',
+    _s(app['current_version']),
+  );
   await _writeText('${syncDir.path}/current_build', _s(app['current_build']));
 
   if (iconIos.isNotEmpty) {
@@ -159,5 +173,7 @@ Future<void> main(List<String> args) async {
 
   stdout.writeln('Branding iOS sincronizado: $appName / $bundleId');
   stdout.writeln('API: $api');
-  stdout.writeln('Versao configurada no servidor: ${_s(app['current_version'], '-')}+${_s(app['current_build'], '-')}');
+  stdout.writeln(
+    'Versao configurada no servidor: ${_s(app['current_version'], '-')}+${_s(app['current_build'], '-')}',
+  );
 }

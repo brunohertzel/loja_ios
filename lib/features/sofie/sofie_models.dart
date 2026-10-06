@@ -15,11 +15,11 @@ class SofieMessage {
   bool get fromAssistant => origin == 'SOFIE' || origin == 'ATENDENTE';
 
   factory SofieMessage.fromJson(Map<String, dynamic> json) => SofieMessage(
-        id: _i(json['id']),
-        origin: _s(json['origem'] ?? json['origin']).toUpperCase(),
-        text: _s(json['mensagem'] ?? json['message'] ?? json['text']),
-        dateTime: _nullable(json['data_hora'] ?? json['date_time']),
-      );
+    id: _i(json['id']),
+    origin: _s(json['origem'] ?? json['origin']).toUpperCase(),
+    text: _s(json['mensagem'] ?? json['message'] ?? json['text']),
+    dateTime: _nullable(json['data_hora'] ?? json['date_time']),
+  );
 }
 
 class SofiePendingAction {
@@ -80,17 +80,15 @@ class SofieSession {
   final List<SofiePendingAction> pendingActions;
 
   factory SofieSession.fromJson(Map<String, dynamic> json) => SofieSession(
-        enabled: _b(json['enabled'], true),
-        status: _s(json['status'], fallback: 'ABERTA'),
-        messages: _list(json['messages'] ?? json['mensagens'])
-            .map(SofieMessage.fromJson)
-            .where((m) => m.text.isNotEmpty)
-            .toList(),
-        pendingActions: _list(json['pending_actions'] ?? json['acoes_pendentes'])
-            .map(SofiePendingAction.fromJson)
-            .where((a) => a.id > 0)
-            .toList(),
-      );
+    enabled: _b(json['enabled'], true),
+    status: _s(json['status'], fallback: 'ABERTA'),
+    messages: _list(
+      json['messages'] ?? json['mensagens'],
+    ).map(SofieMessage.fromJson).where((m) => m.text.isNotEmpty).toList(),
+    pendingActions: _list(
+      json['pending_actions'] ?? json['acoes_pendentes'],
+    ).map(SofiePendingAction.fromJson).where((a) => a.id > 0).toList(),
+  );
 }
 
 class SofieReply {
@@ -111,21 +109,19 @@ class SofieReply {
   final List<SofieMessage> messages;
 
   factory SofieReply.fromJson(Map<String, dynamic> json) => SofieReply(
-        response: _s(json['response'] ?? json['resposta']),
-        lastId: _i(json['last_id']),
-        status: _s(json['status'], fallback: 'ABERTA'),
-        pendingActions: _list(json['pending_actions'] ?? json['acoes_pendentes'])
-            .map(SofiePendingAction.fromJson)
-            .where((a) => a.id > 0)
-            .toList(),
-        suggestedProducts: _list(json['suggested_products'] ?? json['produtos_sugeridos'])
-            .map(SofieSuggestedProduct.fromJson)
-            .toList(),
-        messages: _list(json['messages'] ?? json['mensagens'])
-            .map(SofieMessage.fromJson)
-            .where((m) => m.text.isNotEmpty)
-            .toList(),
-      );
+    response: _s(json['response'] ?? json['resposta']),
+    lastId: _i(json['last_id']),
+    status: _s(json['status'], fallback: 'ABERTA'),
+    pendingActions: _list(
+      json['pending_actions'] ?? json['acoes_pendentes'],
+    ).map(SofiePendingAction.fromJson).where((a) => a.id > 0).toList(),
+    suggestedProducts: _list(
+      json['suggested_products'] ?? json['produtos_sugeridos'],
+    ).map(SofieSuggestedProduct.fromJson).toList(),
+    messages: _list(
+      json['messages'] ?? json['mensagens'],
+    ).map(SofieMessage.fromJson).where((m) => m.text.isNotEmpty).toList(),
+  );
 }
 
 Map<String, dynamic> _map(dynamic value) {

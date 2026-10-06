@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 
 class BrandLogo extends StatelessWidget {
-  const BrandLogo({
-    super.key,
-    required this.logoUrl,
-    this.size = 76,
-  });
+  const BrandLogo({super.key, required this.logoUrl, this.size = 76});
 
   final String? logoUrl;
   final double size;

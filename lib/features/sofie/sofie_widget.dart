@@ -23,33 +23,41 @@ class SofieFloatingButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!config.enabled) return const SizedBox.shrink();
-    final color = AppTheme.parseColor(config.primaryColor) ??
+    final color =
+        AppTheme.parseColor(config.primaryColor) ??
         Theme.of(context).colorScheme.primary;
-    final foreground = color.computeLuminance() > .48 ? Colors.black : Colors.white;
+    final foreground = color.computeLuminance() > .48
+        ? Colors.black
+        : Colors.white;
 
     return SizedBox(
       width: 62,
       height: 62,
       child: FloatingActionButton(
-      heroTag: 'sofie-fab',
-      shape: const CircleBorder(),
-      clipBehavior: Clip.antiAlias,
-      backgroundColor: color,
-      foregroundColor: foreground,
-      tooltip: 'Falar com ${config.name}',
-      onPressed: () => showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => SofieChatPanel(
+        heroTag: 'sofie-fab',
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        backgroundColor: color,
+        foregroundColor: foreground,
+        tooltip: 'Falar com ${config.name}',
+        onPressed: () => showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => SofieChatPanel(
+            api: api,
+            config: config,
+            onCartChanged: onCartChanged,
+          ),
+        ),
+        child: _SofieAvatar(
           api: api,
           config: config,
-          onCartChanged: onCartChanged,
+          size: 44,
+          foreground: foreground,
         ),
       ),
-      child: _SofieAvatar(api: api, config: config, size: 44, foreground: foreground),
-    ),
     );
   }
 }
@@ -185,7 +193,9 @@ class _SofieChatPanelState extends State<SofieChatPanel> {
           _messages = [
             ..._messages,
             SofieMessage(
-              id: reply.lastId > 0 ? reply.lastId : DateTime.now().millisecondsSinceEpoch,
+              id: reply.lastId > 0
+                  ? reply.lastId
+                  : DateTime.now().millisecondsSinceEpoch,
               origin: 'SOFIE',
               text: reply.response,
             ),
@@ -224,7 +234,9 @@ class _SofieChatPanelState extends State<SofieChatPanel> {
           _messages = [
             ..._messages,
             SofieMessage(
-              id: reply.lastId > 0 ? reply.lastId : DateTime.now().millisecondsSinceEpoch,
+              id: reply.lastId > 0
+                  ? reply.lastId
+                  : DateTime.now().millisecondsSinceEpoch,
               origin: 'SOFIE',
               text: reply.response,
             ),
@@ -271,8 +283,11 @@ class _SofieChatPanelState extends State<SofieChatPanel> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final brand = AppTheme.parseColor(widget.config.primaryColor) ?? scheme.primary;
-    final brandText = brand.computeLuminance() > .48 ? Colors.black : Colors.white;
+    final brand =
+        AppTheme.parseColor(widget.config.primaryColor) ?? scheme.primary;
+    final brandText = brand.computeLuminance() > .48
+        ? Colors.black
+        : Colors.white;
     final media = MediaQuery.of(context);
     final height = media.size.height * .78;
     final keyboard = media.viewInsets.bottom;
@@ -285,191 +300,238 @@ class _SofieChatPanelState extends State<SofieChatPanel> {
         curve: Curves.easeOut,
         padding: EdgeInsets.only(bottom: keyboard),
         child: Container(
-      height: height,
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-            decoration: BoxDecoration(
-              color: brand,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-            ),
-            child: Row(
-              children: [
-                _SofieAvatar(api: widget.api, config: widget.config, size: 42, foreground: brandText),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.config.name,
-                        style: TextStyle(
-                          color: brandText,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16,
-                        ),
+          height: height,
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+          ),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+                decoration: BoxDecoration(
+                  color: brand,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(22),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    _SofieAvatar(
+                      api: widget.api,
+                      config: widget.config,
+                      size: 42,
+                      foreground: brandText,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.config.name,
+                            style: TextStyle(
+                              color: brandText,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            '${widget.config.role} · ${_status == 'FILA'
+                                ? 'aguardando atendente'
+                                : _status == 'HUMANO'
+                                ? 'atendimento humano'
+                                : 'online'}',
+                            style: TextStyle(
+                              color: brandText.withOpacity(.82),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        '${widget.config.role} · ${_status == 'FILA' ? 'aguardando atendente' : _status == 'HUMANO' ? 'atendimento humano' : 'online'}',
-                        style: TextStyle(color: brandText.withOpacity(.82), fontSize: 11),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      color: brandText,
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              if (_loading) const LinearProgressIndicator(),
+              if (_error != null)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: scheme.errorContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    _error!,
+                    style: TextStyle(
+                      color: scheme.onErrorContainer,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              Expanded(
+                child: ListView.builder(
+                  controller: _scroll,
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+                  itemCount: _messages.length,
+                  itemBuilder: (_, index) =>
+                      _MessageBubble(message: _messages[index], brand: brand),
+                ),
+              ),
+              if (_suggested.isNotEmpty)
+                SizedBox(
+                  height: 88,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _suggested.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (_, index) {
+                      final product = _suggested[index];
+                      return Container(
+                        width: 190,
+                        padding: const EdgeInsets.all(9),
+                        decoration: BoxDecoration(
+                          color: scheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            if (product.imageUrl != null)
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  product.imageUrl!,
+                                  width: 48,
+                                  height: 48,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, __, ___) =>
+                                      const SizedBox(width: 48),
+                                ),
+                              ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    product.name,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  if (product.priceText != null)
+                                    Text(
+                                      product.priceText!,
+                                      style: TextStyle(
+                                        color: scheme.primary,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              if (_actions.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                  child: Column(
+                    children: _actions
+                        .map(
+                          (action) => SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: _sending
+                                  ? null
+                                  : () => _confirm(action),
+                              icon: const Icon(Icons.shopping_cart_checkout),
+                              label: Text(
+                                action.valueText.isEmpty
+                                    ? 'Confirmar ação da ${widget.config.name}'
+                                    : 'Confirmar · ${action.valueText}',
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              if (!_loading)
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
+                  child: Row(
+                    children: [
+                      _Quick(
+                        text: '🏷️ Ofertas',
+                        onTap: () =>
+                            _send('Quais são as melhores ofertas de hoje?'),
+                      ),
+                      _Quick(
+                        text: '🛒 Carrinho',
+                        onTap: () => _send('O que tem no meu carrinho?'),
+                      ),
+                      _Quick(
+                        text: '📦 Pedido',
+                        onTap: () => _send('Como está meu pedido?'),
                       ),
                     ],
                   ),
                 ),
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  color: brandText,
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-          ),
-          if (_loading) const LinearProgressIndicator(),
-          if (_error != null)
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: scheme.errorContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                _error!,
-                style: TextStyle(color: scheme.onErrorContainer, fontSize: 12),
-              ),
-            ),
-          Expanded(
-            child: ListView.builder(
-              controller: _scroll,
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-              itemCount: _messages.length,
-              itemBuilder: (_, index) => _MessageBubble(
-                message: _messages[index],
-                brand: brand,
-              ),
-            ),
-          ),
-          if (_suggested.isNotEmpty)
-            SizedBox(
-              height: 88,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                scrollDirection: Axis.horizontal,
-                itemCount: _suggested.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (_, index) {
-                  final product = _suggested[index];
-                  return Container(
-                    width: 190,
-                    padding: const EdgeInsets.all(9),
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        if (product.imageUrl != null)
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.network(
-                              product.imageUrl!,
-                              width: 48,
-                              height: 48,
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => const SizedBox(width: 48),
-                            ),
-                          ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(product.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
-                              if (product.priceText != null) Text(product.priceText!, style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w900, fontSize: 11)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-          if (_actions.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-              child: Column(
-                children: _actions
-                    .map(
-                      (action) => SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: _sending ? null : () => _confirm(action),
-                          icon: const Icon(Icons.shopping_cart_checkout),
-                          label: Text(
-                            action.valueText.isEmpty
-                                ? 'Confirmar ação da ${widget.config.name}'
-                                : 'Confirmar · ${action.valueText}',
-                          ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _text,
+                        minLines: 1,
+                        maxLines: 4,
+                        maxLength: 2500,
+                        textInputAction: TextInputAction.newline,
+                        decoration: InputDecoration(
+                          counterText: '',
+                          hintText: 'Fale com a ${widget.config.name}...',
                         ),
                       ),
-                    )
-                    .toList(),
-              ),
-            ),
-          if (!_loading)
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
-              child: Row(
-                children: [
-                  _Quick(text: '🏷️ Ofertas', onTap: () => _send('Quais são as melhores ofertas de hoje?')),
-                  _Quick(text: '🛒 Carrinho', onTap: () => _send('O que tem no meu carrinho?')),
-                  _Quick(text: '📦 Pedido', onTap: () => _send('Como está meu pedido?')),
-                ],
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _text,
-                    minLines: 1,
-                    maxLines: 4,
-                    maxLength: 2500,
-                    textInputAction: TextInputAction.newline,
-                    decoration: InputDecoration(
-                      counterText: '',
-                      hintText: 'Fale com a ${widget.config.name}...',
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    IconButton.filled(
+                      onPressed: _sending ? null : _send,
+                      icon: _sending
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.send),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  onPressed: _sending ? null : _send,
-                  icon: _sending
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.send),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
         ),
       ),
     );
@@ -483,9 +545,9 @@ class _Quick extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(right: 7),
-        child: ActionChip(label: Text(text), onPressed: onTap),
-      );
+    padding: const EdgeInsets.only(right: 7),
+    child: ActionChip(label: Text(text), onPressed: onTap),
+  );
 }
 
 class _MessageBubble extends StatelessWidget {
@@ -570,14 +632,14 @@ class _SofieAvatar extends StatelessWidget {
   }
 
   Widget _fallback() => SizedBox(
-        width: size,
-        height: size,
-        child: Center(
-          child: Icon(
-            Icons.auto_awesome_rounded,
-            color: foreground,
-            size: size * .52,
-          ),
-        ),
-      );
+    width: size,
+    height: size,
+    child: Center(
+      child: Icon(
+        Icons.auto_awesome_rounded,
+        color: foreground,
+        size: size * .52,
+      ),
+    ),
+  );
 }

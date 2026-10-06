@@ -34,17 +34,17 @@ class CartLine {
   double get subtotal => pricing.subtotal;
 
   Map<String, dynamic> toJson() => {
-        'line_id': lineId,
-        'product': product.toJson(),
-        'quantity_visual': quantityVisual,
-        'quantity_real': quantityReal,
-        'quantity_multiplier': quantityMultiplier,
-        'selected_variation_ids': selectedVariationIds,
-        'number_values': numberValues,
-        'observation': observation,
-        'observation_summary': observationSummary,
-        'selected': selected,
-      };
+    'line_id': lineId,
+    'product': product.toJson(),
+    'quantity_visual': quantityVisual,
+    'quantity_real': quantityReal,
+    'quantity_multiplier': quantityMultiplier,
+    'selected_variation_ids': selectedVariationIds,
+    'number_values': numberValues,
+    'observation': observation,
+    'observation_summary': observationSummary,
+    'selected': selected,
+  };
 
   factory CartLine.fromJson(Map<String, dynamic> json) {
     final product = StoreProduct.fromJson(mapValue(json['product']));
@@ -80,18 +80,18 @@ class CartLine {
   }
 
   Map<String, dynamic> toCheckoutJson() => {
-        'product_id': int.tryParse(product.id) ?? product.id,
-        'quantity_visual': quantityVisual,
-        'selected_variation_ids': selectedVariationIds,
-        'number_values': numberValues,
-        'observation': observation,
-      };
+    'product_id': int.tryParse(product.id) ?? product.id,
+    'quantity_visual': quantityVisual,
+    'selected_variation_ids': selectedVariationIds,
+    'number_values': numberValues,
+    'observation': observation,
+  };
 
   Map<String, dynamic> toServerJson() => {
-        'product_id': int.tryParse(product.id) ?? product.id,
-        'quantity_real': quantityReal,
-        'observation': observation,
-      };
+    'product_id': int.tryParse(product.id) ?? product.id,
+    'quantity_real': quantityReal,
+    'observation': observation,
+  };
 }
 
 class CartController extends ChangeNotifier {
@@ -100,12 +100,18 @@ class CartController extends ChangeNotifier {
   bool _loaded = false;
 
   List<CartLine> get items => _items.values.toList(growable: false);
-  List<CartLine> get selectedItems => _items.values.where((line) => line.selected).toList(growable: false);
+  List<CartLine> get selectedItems =>
+      _items.values.where((line) => line.selected).toList(growable: false);
   int get itemCount => _items.length;
+  bool containsProduct(String productId) =>
+      _items.values.any((line) => line.product.id == productId);
   int get selectedItemCount => selectedItems.length;
-  double get total => _items.values.fold<double>(0.0, (sum, line) => sum + line.subtotal);
-  double get selectedTotal => selectedItems.fold<double>(0.0, (sum, line) => sum + line.subtotal);
-  bool get allSelected => _items.isNotEmpty && _items.values.every((line) => line.selected);
+  double get total =>
+      _items.values.fold<double>(0.0, (sum, line) => sum + line.subtotal);
+  double get selectedTotal =>
+      selectedItems.fold<double>(0.0, (sum, line) => sum + line.subtotal);
+  bool get allSelected =>
+      _items.isNotEmpty && _items.values.every((line) => line.selected);
   bool get isLoaded => _loaded;
 
   Future<void> load() async {
@@ -118,8 +124,11 @@ class CartController extends ChangeNotifier {
         if (decoded is List) {
           for (final item in decoded) {
             if (item is Map) {
-              final line = CartLine.fromJson(item.map((k, v) => MapEntry(k.toString(), v)));
-              if (line.lineId.isNotEmpty && line.product.id.isNotEmpty) _items[line.lineId] = line;
+              final line = CartLine.fromJson(
+                item.map((k, v) => MapEntry(k.toString(), v)),
+              );
+              if (line.lineId.isNotEmpty && line.product.id.isNotEmpty)
+                _items[line.lineId] = line;
             }
           }
         }
@@ -134,7 +143,10 @@ class CartController extends ChangeNotifier {
   Future<void> _persist() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_storageKey, jsonEncode(_items.values.map((e) => e.toJson()).toList()));
+      await prefs.setString(
+        _storageKey,
+        jsonEncode(_items.values.map((e) => e.toJson()).toList()),
+      );
     } catch (_) {}
   }
 
@@ -160,23 +172,25 @@ class CartController extends ChangeNotifier {
 
         // Se a linha nasceu no app, preserva variacoes/multiplicador locais.
         // O servidor continua autoritativo para produto e quantidade.
-        final key = existing?.lineId ??
+        final key =
+            existing?.lineId ??
             'server:${incoming.product.id}|${incoming.observation.trim()}';
         server[key] = CartLine(
           lineId: key,
           product: incoming.product,
-          quantityVisual: existing?.quantityMultiplier != null &&
+          quantityVisual:
+              existing?.quantityMultiplier != null &&
                   existing!.quantityMultiplier! > 0
               ? incoming.quantityReal / existing.quantityMultiplier!
               : incoming.quantityVisual,
           quantityReal: incoming.quantityReal,
           quantityMultiplier: existing?.quantityMultiplier,
-          selectedVariationIds: existing?.selectedVariationIds ??
-              incoming.selectedVariationIds,
+          selectedVariationIds:
+              existing?.selectedVariationIds ?? incoming.selectedVariationIds,
           numberValues: existing?.numberValues ?? incoming.numberValues,
           observation: incoming.observation,
-          observationSummary: existing?.observationSummary ??
-              incoming.observationSummary,
+          observationSummary:
+              existing?.observationSummary ?? incoming.observationSummary,
           selected: existing?.selected ?? incoming.selected,
         );
       } catch (_) {}
@@ -297,7 +311,10 @@ class CartController extends ChangeNotifier {
   }
 
   Future<void> removeSelected() async {
-    final selectedIds = _items.values.where((line) => line.selected).map((line) => line.lineId).toList(growable: false);
+    final selectedIds = _items.values
+        .where((line) => line.selected)
+        .map((line) => line.lineId)
+        .toList(growable: false);
     for (final id in selectedIds) {
       _items.remove(id);
     }
@@ -311,6 +328,7 @@ class CartController extends ChangeNotifier {
     await _persist();
   }
 
-  List<Map<String, dynamic>> checkoutPayload() =>
-      selectedItems.map((line) => line.toCheckoutJson()).toList(growable: false);
+  List<Map<String, dynamic>> checkoutPayload() => selectedItems
+      .map((line) => line.toCheckoutJson())
+      .toList(growable: false);
 }

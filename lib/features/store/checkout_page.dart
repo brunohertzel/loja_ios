@@ -1,5 +1,5 @@
+import '../../core/config/platform_info.dart';
 import 'dart:convert';
-import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -57,7 +57,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
   @override
   void initState() {
     super.initState();
-    _idempotencyKey = '${Platform.isIOS ? 'ios' : 'android'}-${DateTime.now().microsecondsSinceEpoch}';
+    _idempotencyKey =
+        '${PlatformInfo.isIOS ? 'ios' : 'android'}-${DateTime.now().microsecondsSinceEpoch}';
     _prepare();
   }
 
@@ -87,14 +88,32 @@ class _CheckoutPageState extends State<CheckoutPage> {
         receiptType: _receiptType,
       );
       _data = mapValue(json['data']);
-      _receiptType = stringValue(mapValue(_data['receipt'])['selected'], fallback: 'ENTREGA');
-      _addressId = stringValue(_data['selected_address_id'], fallback: 'principal');
+      _receiptType = stringValue(
+        mapValue(_data['receipt'])['selected'],
+        fallback: 'ENTREGA',
+      );
+      _addressId = stringValue(
+        _data['selected_address_id'],
+        fallback: 'principal',
+      );
       final first = nullableString(mapValue(_data['schedule'])['first_date']);
-      final firstDate = first == null ? DateTime.now() : DateTime.tryParse(first) ?? DateTime.now();
+      final firstDate = first == null
+          ? DateTime.now()
+          : DateTime.tryParse(first) ?? DateTime.now();
       if (_date == null || _date!.isBefore(firstDate)) _date = firstDate;
       final payments = listValue(_data['payment_methods']);
-      final enabledPayments = payments.where((p) => _paymentLocallyEnabled(p) && boolValue(p['mobile_enabled'], fallback: true)).toList(growable: false);
-      if (enabledPayments.isNotEmpty && (_paymentId == null || !enabledPayments.any((p) => stringValue(p['id']) == _paymentId))) {
+      final enabledPayments = payments
+          .where(
+            (p) =>
+                _paymentLocallyEnabled(p) &&
+                boolValue(p['mobile_enabled'], fallback: true),
+          )
+          .toList(growable: false);
+      if (enabledPayments.isNotEmpty &&
+          (_paymentId == null ||
+              !enabledPayments.any(
+                (p) => stringValue(p['id']) == _paymentId,
+              ))) {
         _paymentId = stringValue(enabledPayments.first['id']);
       } else if (enabledPayments.isEmpty) {
         _paymentId = null;
@@ -110,7 +129,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
           return;
         }
       }
-      _error = e.isUnauthorized ? 'Entre na sua conta para continuar a compra.' : e.message;
+      _error = e.isUnauthorized
+          ? 'Entre na sua conta para continuar a compra.'
+          : e.message;
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -131,7 +152,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
       setState(() {
         _data['freight'] = data['freight'];
         _data['summary'] = data['summary'];
-        if (data['payment_methods'] != null) _data['payment_methods'] = data['payment_methods'];
+        if (data['payment_methods'] != null)
+          _data['payment_methods'] = data['payment_methods'];
       });
       if (_couponCode != null && _couponCode!.isNotEmpty) {
         await _applyCoupon(_couponCode!, silent: true);
@@ -146,7 +168,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.isUnauthorized ? 'Entre na sua conta para continuar.' : e.message)),
+          SnackBar(
+            content: Text(
+              e.isUnauthorized
+                  ? 'Entre na sua conta para continuar.'
+                  : e.message,
+            ),
+          ),
         );
       }
     } finally {
@@ -157,10 +185,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
   Future<void> _applyCoupon(String rawCode, {bool silent = false}) async {
     final code = rawCode.trim().toUpperCase();
     if (code.isEmpty) {
-      if (!silent && mounted) setState(() => _couponMessage = 'Digite o código do cupom.');
+      if (!silent && mounted)
+        setState(() => _couponMessage = 'Digite o código do cupom.');
       return;
     }
-    if (mounted) setState(() { _couponLoading = true; if (!silent) _couponMessage = null; });
+    if (mounted)
+      setState(() {
+        _couponLoading = true;
+        if (!silent) _couponMessage = null;
+      });
     try {
       final json = await widget.repository.checkoutCoupon(
         widget.cart.checkoutPayload(),
@@ -173,9 +206,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
       setState(() {
         _couponCode = code;
         _couponController.text = code;
-        _couponMessage = stringValue(data['message'], fallback: 'Cupom aplicado.');
+        _couponMessage = stringValue(
+          data['message'],
+          fallback: 'Cupom aplicado.',
+        );
         _data['summary'] = data['summary'];
-        if (data['payment_methods'] != null) _data['payment_methods'] = data['payment_methods'];
+        if (data['payment_methods'] != null)
+          _data['payment_methods'] = data['payment_methods'];
         _data['coupon'] = data['coupon'];
       });
     } on ApiException catch (e) {
@@ -211,54 +248,84 @@ class _CheckoutPageState extends State<CheckoutPage> {
   Future<String> _tokenizePagarmeCard(Map<String, dynamic> payment) async {
     final publicKey = stringValue(payment['public_key']);
     if (publicKey.isEmpty) {
-      throw const ApiException('Public Key Pagar.me não configurada.', code: 'PAGARME_PUBLIC_KEY_MISSING');
+      throw const ApiException(
+        'Public Key Pagar.me não configurada.',
+        code: 'PAGARME_PUBLIC_KEY_MISSING',
+      );
     }
     final number = _cardNumberController.text.replaceAll(RegExp(r'\D'), '');
     final holder = _cardHolderController.text.trim();
     final expiry = _cardExpiryController.text.replaceAll(RegExp(r'\D'), '');
     final cvv = _cardCvvController.text.replaceAll(RegExp(r'\D'), '');
-    if (number.length < 13 || holder.isEmpty || expiry.length != 4 || cvv.length < 3) {
-      throw const ApiException('Confira os dados do cartão.', code: 'CARD_INVALID');
+    if (number.length < 13 ||
+        holder.isEmpty ||
+        expiry.length != 4 ||
+        cvv.length < 3) {
+      throw const ApiException(
+        'Confira os dados do cartão.',
+        code: 'CARD_INVALID',
+      );
     }
     final month = int.tryParse(expiry.substring(0, 2)) ?? 0;
     var year = int.tryParse(expiry.substring(2, 4)) ?? 0;
-    if (month < 1 || month > 12) throw const ApiException('Validade do cartão inválida.', code: 'CARD_EXPIRY_INVALID');
+    if (month < 1 || month > 12)
+      throw const ApiException(
+        'Validade do cartão inválida.',
+        code: 'CARD_EXPIRY_INVALID',
+      );
     year += 2000;
 
-    final uri = Uri.parse('https://api.pagar.me/core/v5/tokens').replace(queryParameters: {'appId': publicKey});
-    final response = await http.post(
-      uri,
-      headers: const {'Content-Type': 'application/json', 'Accept': 'application/json'},
-      body: jsonEncode({
-        'type': 'card',
-        'card': {
-          'number': number,
-          'holder_name': holder,
-          'exp_month': month,
-          'exp_year': year,
-          'cvv': cvv,
-        },
-      }),
-    ).timeout(const Duration(seconds: 25));
+    final uri = Uri.parse(
+      'https://api.pagar.me/core/v5/tokens',
+    ).replace(queryParameters: {'appId': publicKey});
+    final response = await http
+        .post(
+          uri,
+          headers: const {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: jsonEncode({
+            'type': 'card',
+            'card': {
+              'number': number,
+              'holder_name': holder,
+              'exp_month': month,
+              'exp_year': year,
+              'cvv': cvv,
+            },
+          }),
+        )
+        .timeout(const Duration(seconds: 25));
     Map<String, dynamic> data = <String, dynamic>{};
     try {
       final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-      if (decoded is Map) data = decoded.map((k, v) => MapEntry(k.toString(), v));
+      if (decoded is Map)
+        data = decoded.map((k, v) => MapEntry(k.toString(), v));
     } catch (_) {}
     final token = stringValue(data['id']);
-    if (response.statusCode < 200 || response.statusCode >= 300 || token.isEmpty) {
-      final message = stringValue(data['message'], fallback: 'Não foi possível validar o cartão no Pagar.me.');
-      throw ApiException(message, statusCode: response.statusCode, code: 'CARD_TOKENIZATION_FAILED');
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300 ||
+        token.isEmpty) {
+      final message = stringValue(
+        data['message'],
+        fallback: 'Não foi possível validar o cartão no Pagar.me.',
+      );
+      throw ApiException(
+        message,
+        statusCode: response.statusCode,
+        code: 'CARD_TOKENIZATION_FAILED',
+      );
     }
     return token;
   }
 
   bool _paymentLocallyEnabled(Map<String, dynamic> payment) {
     final id = stringValue(payment['id']).toUpperCase();
-    if (id == 'GOOGLE_PAY' && (Platform.isIOS || !GeneratedAppConfig.googlePayEnabled)) return false;
-    // Apple Pay entra em uma etapa propria; ate a tokenizacao estar ligada ao HUB,
-    // nao o oferecemos para evitar finalizar sem token de carteira.
     if (id == 'APPLE_PAY') return false;
+    if (id == 'GOOGLE_PAY' &&
+        (PlatformInfo.isIOS || !GeneratedAppConfig.googlePayEnabled))
+      return false;
     return true;
   }
 
@@ -272,7 +339,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         merchant['merchantId'] = GeneratedAppConfig.googlePayMerchantId.trim();
       }
       if (GeneratedAppConfig.googlePayMerchantName.trim().isNotEmpty) {
-        merchant['merchantName'] = GeneratedAppConfig.googlePayMerchantName.trim();
+        merchant['merchantName'] = GeneratedAppConfig.googlePayMerchantName
+            .trim();
       }
       if (merchant.isNotEmpty) data['merchantInfo'] = merchant;
       config['data'] = data;
@@ -280,21 +348,28 @@ class _CheckoutPageState extends State<CheckoutPage> {
     return config;
   }
 
-  Future<String> _tokenizeGooglePay(Map<String, dynamic> payment, double total) async {
+  Future<String> _tokenizeGooglePay(
+    Map<String, dynamic> payment,
+    double total,
+  ) async {
     if (!GeneratedAppConfig.googlePayEnabled) {
       throw const ApiException(
         'Google Pay não está habilitado nesta compilação do aplicativo.',
         code: 'GOOGLE_PAY_LOCAL_DISABLED',
       );
     }
-    final configJson = _googlePayLocalizeConfig(mapValue(payment['google_pay_config']));
+    final configJson = _googlePayLocalizeConfig(
+      mapValue(payment['google_pay_config']),
+    );
     if (configJson.isEmpty) {
       throw const ApiException(
         'Google Pay ainda não está configurado para este HUB.',
         code: 'GOOGLE_PAY_CONFIG_MISSING',
       );
     }
-    final configuration = PaymentConfiguration.fromJsonString(jsonEncode(configJson));
+    final configuration = PaymentConfiguration.fromJsonString(
+      jsonEncode(configJson),
+    );
     final client = Pay(<PayProvider, PaymentConfiguration>{
       PayProvider.google_pay: configuration,
     });
@@ -305,16 +380,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
         code: 'GOOGLE_PAY_UNAVAILABLE',
       );
     }
-    final result = await client.showPaymentSelector(
-      PayProvider.google_pay,
-      <PaymentItem>[
-        PaymentItem(
-          label: 'Total',
-          amount: total.toStringAsFixed(2),
-          status: PaymentItemStatus.final_price,
-        ),
-      ],
-    );
+    final result = await client
+        .showPaymentSelector(PayProvider.google_pay, <PaymentItem>[
+          PaymentItem(
+            label: 'Total',
+            amount: total.toStringAsFixed(2),
+            status: PaymentItemStatus.final_price,
+          ),
+        ]);
     return jsonEncode(result);
   }
 
@@ -331,12 +404,22 @@ class _CheckoutPageState extends State<CheckoutPage> {
     if (isCash && _needsChange) {
       changeFor = _parseMoney(_changeForController.text);
       if (changeFor == null || changeFor <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe para quanto precisa de troco.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Informe para quanto precisa de troco.'),
+          ),
+        );
         return;
       }
       final total = numberValue(summary['total']);
       if (changeFor + 0.0001 < total) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('O valor para troco não pode ser menor que ${_money(total)}.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'O valor para troco não pode ser menor que ${_money(total)}.',
+            ),
+          ),
+        );
         return;
       }
     }
@@ -344,16 +427,26 @@ class _CheckoutPageState extends State<CheckoutPage> {
     setState(() => _submitting = true);
     try {
       if (_paymentId == 'CREDIT_CARD') {
-        if (selectedPayment == null || stringValue(selectedPayment['hub']).toUpperCase() != 'PAGARME') {
-          throw const ApiException('Cartão online ainda não está disponível para este HUB.', code: 'CARD_HUB_UNSUPPORTED');
+        if (selectedPayment == null ||
+            stringValue(selectedPayment['hub']).toUpperCase() != 'PAGARME') {
+          throw const ApiException(
+            'Cartão online ainda não está disponível para este HUB.',
+            code: 'CARD_HUB_UNSUPPORTED',
+          );
         }
         cardToken = await _tokenizePagarmeCard(selectedPayment);
       }
       if (_paymentId == 'GOOGLE_PAY') {
         if (selectedPayment == null) {
-          throw const ApiException('Google Pay não está disponível.', code: 'GOOGLE_PAY_UNAVAILABLE');
+          throw const ApiException(
+            'Google Pay não está disponível.',
+            code: 'GOOGLE_PAY_UNAVAILABLE',
+          );
         }
-        walletToken = await _tokenizeGooglePay(selectedPayment, numberValue(summary['total']));
+        walletToken = await _tokenizeGooglePay(
+          selectedPayment,
+          numberValue(summary['total']),
+        );
       }
       final json = await widget.repository.checkoutSubmit(
         widget.cart.checkoutPayload(),
@@ -384,9 +477,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
           return;
         }
       }
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Não foi possível concluir o pedido: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Não foi possível concluir o pedido: $e')),
+        );
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -394,17 +493,24 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   Future<void> _pickDate() async {
     final schedule = mapValue(_data['schedule']);
-    final firstDate = DateTime.tryParse(stringValue(schedule['first_date'])) ?? DateTime.now();
+    final firstDate =
+        DateTime.tryParse(stringValue(schedule['first_date'])) ??
+        DateTime.now();
     final allowed = listValue(schedule['allowed_weekdays'])
         .map((e) => int.tryParse(e.toString()))
         .whereType<int>()
         .where((e) => e >= 1 && e <= 7)
         .toSet();
-    DateTime initial = _date != null && !_date!.isBefore(firstDate) ? _date! : firstDate;
+    DateTime initial = _date != null && !_date!.isBefore(firstDate)
+        ? _date!
+        : firstDate;
     if (allowed.isNotEmpty && !allowed.contains(initial.weekday)) {
       for (var i = 0; i < 14; i++) {
         final candidate = firstDate.add(Duration(days: i));
-        if (allowed.contains(candidate.weekday)) { initial = candidate; break; }
+        if (allowed.contains(candidate.weekday)) {
+          initial = candidate;
+          break;
+        }
       }
     }
     final picked = await showDatePicker(
@@ -413,8 +519,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
       initialDate: initial,
       firstDate: firstDate,
       lastDate: firstDate.add(const Duration(days: 120)),
-      selectableDayPredicate: allowed.isEmpty ? null : (day) => !day.isBefore(firstDate) && allowed.contains(day.weekday),
-      helpText: _receiptType == 'RETIRADA' ? 'Escolha a data da retirada' : 'Escolha a data da entrega',
+      selectableDayPredicate: allowed.isEmpty
+          ? null
+          : (day) => !day.isBefore(firstDate) && allowed.contains(day.weekday),
+      helpText: _receiptType == 'RETIRADA'
+          ? 'Escolha a data da retirada'
+          : 'Escolha a data da entrega',
       cancelText: 'CANCELAR',
       confirmText: 'CONFIRMAR',
     );
@@ -433,9 +543,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Onde deseja receber?', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+              Text(
+                'Onde deseja receber?',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+              ),
               const SizedBox(height: 5),
-              const Text('Os endereços fora da área atendida ficam desativados.'),
+              const Text(
+                'Os endereços fora da área atendida ficam desativados.',
+              ),
               const SizedBox(height: 14),
               Flexible(
                 child: ListView.separated(
@@ -448,48 +565,107 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     final eligible = boolValue(a['eligible']);
                     final isSelected = id == _addressId;
                     final message = nullableString(a['validation_message']);
-                    final distance = numberValue(a['distance_km'], fallback: -1);
+                    final distance = numberValue(
+                      a['distance_km'],
+                      fallback: -1,
+                    );
                     return InkWell(
                       borderRadius: BorderRadius.circular(14),
-                      onTap: eligible ? () => Navigator.of(sheetContext).pop(id) : null,
+                      onTap: eligible
+                          ? () => Navigator.of(sheetContext).pop(id)
+                          : null,
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 160),
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: eligible ? const Color(0xFFF0FDF4) : const Color(0xFFF3F4F6),
+                          color: eligible
+                              ? const Color(0xFFF0FDF4)
+                              : const Color(0xFFF3F4F6),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: isSelected && eligible
                                 ? Theme.of(context).colorScheme.primary
-                                : eligible ? const Color(0xFF86EFAC) : const Color(0xFFD1D5DB),
+                                : eligible
+                                ? const Color(0xFF86EFAC)
+                                : const Color(0xFFD1D5DB),
                             width: isSelected ? 2 : 1,
                           ),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(eligible ? Icons.check_circle : Icons.block, color: eligible ? const Color(0xFF15803D) : const Color(0xFF9CA3AF)),
+                            Icon(
+                              eligible ? Icons.check_circle : Icons.block,
+                              color: eligible
+                                  ? const Color(0xFF15803D)
+                                  : const Color(0xFF9CA3AF),
+                            ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(children: [
-                                    Expanded(child: Text(stringValue(a['label'], fallback: 'Endereço'), style: const TextStyle(fontWeight: FontWeight.w900))),
-                                    if (eligible)
-                                      const Text('Disponível', style: TextStyle(color: Color(0xFF15803D), fontWeight: FontWeight.w800, fontSize: 12))
-                                    else
-                                      Text('Indisponível', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w800, fontSize: 12)),
-                                  ]),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          stringValue(
+                                            a['label'],
+                                            fallback: 'Endereço',
+                                          ),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ),
+                                      if (eligible)
+                                        const Text(
+                                          'Disponível',
+                                          style: TextStyle(
+                                            color: Color(0xFF15803D),
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
+                                          ),
+                                        )
+                                      else
+                                        Text(
+                                          'Indisponível',
+                                          style: TextStyle(
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant,
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                   const SizedBox(height: 4),
                                   Text(_addressLine(a)),
                                   if (distance >= 0) ...[
                                     const SizedBox(height: 4),
-                                    Text('${distance.toStringAsFixed(2).replaceAll('.', ',')} km', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                                    Text(
+                                      '${distance.toStringAsFixed(2).replaceAll('.', ',')} km',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
                                   ],
-                                  if (message != null && message.isNotEmpty) ...[
+                                  if (message != null &&
+                                      message.isNotEmpty) ...[
                                     const SizedBox(height: 4),
-                                    Text(message, style: TextStyle(fontSize: 12, color: eligible ? const Color(0xFF166534) : Theme.of(context).colorScheme.onSurfaceVariant)),
+                                    Text(
+                                      message,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: eligible
+                                            ? const Color(0xFF166534)
+                                            : Theme.of(
+                                                context,
+                                              ).colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
                                   ],
                                 ],
                               ),
@@ -516,7 +692,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
   Widget build(BuildContext context) {
     if (_completed != null) return _buildCompleted(context, _completed!);
     if (_loading) {
-      return Scaffold(appBar: AppBar(title: const Text('Finalizar compra')), body: const Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        appBar: AppBar(title: const Text('Finalizar compra')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
     }
     if (_error != null) {
       return Scaffold(
@@ -524,13 +703,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.error_outline, size: 56),
-              const SizedBox(height: 12),
-              Text(_error!, textAlign: TextAlign.center),
-              const SizedBox(height: 14),
-              FilledButton.icon(onPressed: () => _prepare(), icon: const Icon(Icons.refresh), label: const Text('Tentar novamente')),
-            ]),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, size: 56),
+                const SizedBox(height: 12),
+                Text(_error!, textAlign: TextAlign.center),
+                const SizedBox(height: 14),
+                FilledButton.icon(
+                  onPressed: () => _prepare(),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Tentar novamente'),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -545,7 +731,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final quote = mapValue(_data['quote']);
     final capabilities = mapValue(_data['capabilities']);
     final coupon = mapValue(_data['coupon']);
-    final freightOk = boolValue(freight['ok'], fallback: _receiptType == 'RETIRADA');
+    final freightOk = boolValue(
+      freight['ok'],
+      fallback: _receiptType == 'RETIRADA',
+    );
     final minimumReached = boolValue(quote['minimum_reached'], fallback: true);
     Map<String, dynamic>? currentAddress;
     for (final address in addresses) {
@@ -566,8 +755,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
             icon: Icons.shopping_bag_outlined,
             child: SegmentedButton<String>(
               segments: [
-                const ButtonSegment(value: 'ENTREGA', icon: Icon(Icons.delivery_dining), label: Text('Entrega')),
-                if (boolValue(receipt['pickup_available'])) const ButtonSegment(value: 'RETIRADA', icon: Icon(Icons.storefront), label: Text('Retirada')),
+                const ButtonSegment(
+                  value: 'ENTREGA',
+                  icon: Icon(Icons.delivery_dining),
+                  label: Text('Entrega'),
+                ),
+                if (boolValue(receipt['pickup_available']))
+                  const ButtonSegment(
+                    value: 'RETIRADA',
+                    icon: Icon(Icons.storefront),
+                    label: Text('Retirada'),
+                  ),
               ],
               selected: <String>{_receiptType},
               onSelectionChanged: (value) async {
@@ -582,7 +780,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
               title: 'Endereço de entrega',
               icon: Icons.location_on_outlined,
               child: addresses.isEmpty
-                  ? const Text('Nenhum endereço cadastrado. Cadastre um endereço na sua conta.')
+                  ? const Text(
+                      'Nenhum endereço cadastrado. Cadastre um endereço na sua conta.',
+                    )
                   : InkWell(
                       borderRadius: BorderRadius.circular(14),
                       onTap: () => _showAddressPicker(addresses),
@@ -591,51 +791,125 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: freightOk ? const Color(0xFF86EFAC) : Theme.of(context).colorScheme.error),
-                          color: freightOk ? const Color(0xFFF0FDF4) : Theme.of(context).colorScheme.errorContainer.withOpacity(.28),
-                        ),
-                        child: Row(children: [
-                          Icon(freightOk ? Icons.check_circle : Icons.error_outline, color: freightOk ? const Color(0xFF15803D) : Theme.of(context).colorScheme.error),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Text(currentAddress == null ? 'Escolha um endereço' : stringValue(currentAddress['label'], fallback: 'Endereço'), style: const TextStyle(fontWeight: FontWeight.w900)),
-                              if (currentAddress != null) Text(_addressLine(currentAddress), maxLines: 2, overflow: TextOverflow.ellipsis),
-                              if (nullableString(freight['message']) != null) ...[
-                                const SizedBox(height: 3),
-                                Text(stringValue(freight['message']), style: TextStyle(fontSize: 12, color: freightOk ? const Color(0xFF166534) : Theme.of(context).colorScheme.error)),
-                              ],
-                            ]),
+                          border: Border.all(
+                            color: freightOk
+                                ? const Color(0xFF86EFAC)
+                                : Theme.of(context).colorScheme.error,
                           ),
-                          const SizedBox(width: 8),
-                          const Icon(Icons.chevron_right),
-                        ]),
+                          color: freightOk
+                              ? const Color(0xFFF0FDF4)
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.errorContainer.withOpacity(.28),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              freightOk
+                                  ? Icons.check_circle
+                                  : Icons.error_outline,
+                              color: freightOk
+                                  ? const Color(0xFF15803D)
+                                  : Theme.of(context).colorScheme.error,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    currentAddress == null
+                                        ? 'Escolha um endereço'
+                                        : stringValue(
+                                            currentAddress['label'],
+                                            fallback: 'Endereço',
+                                          ),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  if (currentAddress != null)
+                                    Text(
+                                      _addressLine(currentAddress),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  if (nullableString(freight['message']) !=
+                                      null) ...[
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      stringValue(freight['message']),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: freightOk
+                                            ? const Color(0xFF166534)
+                                            : Theme.of(
+                                                context,
+                                              ).colorScheme.error,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.chevron_right),
+                          ],
+                        ),
                       ),
                     ),
             ),
           ],
           const SizedBox(height: 10),
           _CheckoutCard(
-            title: _receiptType == 'RETIRADA' ? 'Data da retirada' : 'Data da entrega',
+            title: _receiptType == 'RETIRADA'
+                ? 'Data da retirada'
+                : 'Data da entrega',
             icon: Icons.calendar_month_outlined,
             child: InkWell(
               borderRadius: BorderRadius.circular(14),
               onTap: _pickDate,
               child: Container(
                 padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: Theme.of(context).colorScheme.outlineVariant)),
-                child: Row(children: [
-                  const Icon(Icons.calendar_today_outlined),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(_date == null ? 'Escolher data' : '${_weekdayPt(_date!)} · ${_dateBr(_date!)}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
-                      const SizedBox(height: 2),
-                      Text('Toque para abrir o calendário', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                    ]),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant,
                   ),
-                  const Icon(Icons.chevron_right),
-                ]),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_today_outlined),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _date == null
+                                ? 'Escolher data'
+                                : '${_weekdayPt(_date!)} · ${_dateBr(_date!)}',
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Toque para abrir o calendário',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right),
+                  ],
+                ),
               ),
             ),
           ),
@@ -644,84 +918,183 @@ class _CheckoutPageState extends State<CheckoutPage> {
             _CheckoutCard(
               title: 'Cupom de desconto',
               icon: Icons.confirmation_number_outlined,
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _couponController,
-                      textCapitalization: TextCapitalization.characters,
-                      enabled: _couponCode == null,
-                      decoration: const InputDecoration(hintText: 'Digite o código'),
-                      onSubmitted: _couponCode == null ? (v) => _applyCoupon(v) : null,
-                    ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _couponController,
+                          textCapitalization: TextCapitalization.characters,
+                          enabled: _couponCode == null,
+                          decoration: const InputDecoration(
+                            hintText: 'Digite o código',
+                          ),
+                          onSubmitted: _couponCode == null
+                              ? (v) => _applyCoupon(v)
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (_couponCode == null)
+                        FilledButton(
+                          onPressed: _couponLoading
+                              ? null
+                              : () => _applyCoupon(_couponController.text),
+                          child: const Text('Aplicar'),
+                        )
+                      else
+                        OutlinedButton(
+                          onPressed: _couponLoading ? null : _removeCoupon,
+                          child: const Text('Remover'),
+                        ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  if (_couponCode == null)
-                    FilledButton(onPressed: _couponLoading ? null : () => _applyCoupon(_couponController.text), child: const Text('Aplicar'))
-                  else
-                    OutlinedButton(onPressed: _couponLoading ? null : _removeCoupon, child: const Text('Remover')),
-                ]),
-                if (_couponLoading) ...[const SizedBox(height: 8), const LinearProgressIndicator()],
-                if (_couponMessage != null) ...[
-                  const SizedBox(height: 8),
-                  Text(_couponMessage!, style: TextStyle(fontWeight: FontWeight.w700, color: _couponCode == null ? Theme.of(context).colorScheme.error : const Color(0xFF15803D))),
+                  if (_couponLoading) ...[
+                    const SizedBox(height: 8),
+                    const LinearProgressIndicator(),
+                  ],
+                  if (_couponMessage != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _couponMessage!,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: _couponCode == null
+                            ? Theme.of(context).colorScheme.error
+                            : const Color(0xFF15803D),
+                      ),
+                    ),
+                  ],
+                  if (coupon.isNotEmpty &&
+                      numberValue(coupon['saving']) > 0) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Economia: ${_money(numberValue(coupon['saving']))}',
+                      style: const TextStyle(
+                        color: Color(0xFF15803D),
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
                 ],
-                if (coupon.isNotEmpty && numberValue(coupon['saving']) > 0) ...[
-                  const SizedBox(height: 4),
-                  Text('Economia: ${_money(numberValue(coupon['saving']))}', style: const TextStyle(color: Color(0xFF15803D), fontWeight: FontWeight.w900)),
-                ],
-              ]),
+              ),
             ),
           ],
           const SizedBox(height: 10),
           _CheckoutCard(
             title: 'Resumo do pedido',
             icon: Icons.receipt_long_outlined,
-            child: Column(children: [
-              _SummaryRow('Produtos (${widget.cart.selectedItemCount})', numberValue(summary['subtotal'])),
-              _SummaryRow('Frete', numberValue(summary['freight']), suffix: _receiptType == 'RETIRADA' || numberValue(summary['freight']) <= 0 ? 'Grátis' : null),
-              if (numberValue(summary['discount']) > 0) _SummaryRow('Desconto', -numberValue(summary['discount']), prefixMinus: true),
-              const Divider(height: 24),
-              _SummaryRow('Total do pedido', numberValue(summary['total']), strong: true),
-              if (_freightLoading) ...[const SizedBox(height: 10), const LinearProgressIndicator()],
-              if (!freightOk && _receiptType == 'ENTREGA') ...[
-                const SizedBox(height: 10),
-                Text(stringValue(freight['message'], fallback: 'Endereço fora da área de entrega.'), style: TextStyle(color: Theme.of(context).colorScheme.error, fontWeight: FontWeight.w700)),
+            child: Column(
+              children: [
+                _SummaryRow(
+                  'Produtos (${widget.cart.selectedItemCount})',
+                  numberValue(summary['subtotal']),
+                ),
+                _SummaryRow(
+                  'Frete',
+                  numberValue(summary['freight']),
+                  suffix:
+                      _receiptType == 'RETIRADA' ||
+                          numberValue(summary['freight']) <= 0
+                      ? 'Grátis'
+                      : null,
+                ),
+                if (numberValue(summary['discount']) > 0)
+                  _SummaryRow(
+                    'Desconto',
+                    -numberValue(summary['discount']),
+                    prefixMinus: true,
+                  ),
+                const Divider(height: 24),
+                _SummaryRow(
+                  'Total do pedido',
+                  numberValue(summary['total']),
+                  strong: true,
+                ),
+                if (_freightLoading) ...[
+                  const SizedBox(height: 10),
+                  const LinearProgressIndicator(),
+                ],
+                if (!freightOk && _receiptType == 'ENTREGA') ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    stringValue(
+                      freight['message'],
+                      fallback: 'Endereço fora da área de entrega.',
+                    ),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                if (!minimumReached) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Faltam ${_money(numberValue(quote['minimum_missing']))} para o pedido mínimo.',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ],
-              if (!minimumReached) ...[
-                const SizedBox(height: 10),
-                Text('Faltam ${_money(numberValue(quote['minimum_missing']))} para o pedido mínimo.', style: TextStyle(color: Theme.of(context).colorScheme.error, fontWeight: FontWeight.w700)),
-              ],
-            ]),
+            ),
           ),
           const SizedBox(height: 10),
           _CheckoutCard(
             title: 'Pagamento',
             icon: Icons.payments_outlined,
             child: payments.isEmpty
-                ? const Text('Nenhum meio de pagamento disponível para este pedido.')
+                ? const Text(
+                    'Nenhum meio de pagamento disponível para este pedido.',
+                  )
                 : Column(
                     children: [
                       ...payments.map((payment) {
                         final id = stringValue(payment['id']);
-                        final enabled = _paymentLocallyEnabled(payment) && boolValue(payment['mobile_enabled'], fallback: true);
+                        final enabled =
+                            _paymentLocallyEnabled(payment) &&
+                            boolValue(
+                              payment['mobile_enabled'],
+                              fallback: true,
+                            );
                         final hub = nullableString(payment['hub']);
-                        final reason = id == 'GOOGLE_PAY' && !GeneratedAppConfig.googlePayEnabled
-                            ? (Platform.isIOS ? 'Google Pay é exclusivo do Android.' : 'Google Pay não foi habilitado nesta compilação.')
+                        final reason =
+                            id == 'GOOGLE_PAY' &&
+                                (PlatformInfo.isIOS ||
+                                    !GeneratedAppConfig.googlePayEnabled)
+                            ? 'Google Pay não foi habilitado nesta compilação.'
                             : nullableString(payment['mobile_reason']);
                         return RadioListTile<String>(
                           value: id,
                           groupValue: _paymentId,
                           contentPadding: EdgeInsets.zero,
-                          title: Text(stringValue(payment['name'], fallback: id)),
+                          title: Text(
+                            stringValue(payment['name'], fallback: id),
+                          ),
                           subtitle: reason != null && !enabled
                               ? Text(reason)
-                              : hub == null ? null : Text('Online · $hub'),
+                              : hub == null
+                              ? null
+                              : Text('Online · $hub'),
                           secondary: Icon(_paymentIcon(id)),
-                          onChanged: enabled ? (value) => setState(() { _paymentId = value; _paymentTerm = null; if (!_isCashPayment(payments, value)) { _needsChange = false; _changeForController.clear(); } }) : null,
+                          onChanged: enabled
+                              ? (value) => setState(() {
+                                  _paymentId = value;
+                                  _paymentTerm = null;
+                                  if (!_isCashPayment(payments, value)) {
+                                    _needsChange = false;
+                                    _changeForController.clear();
+                                  }
+                                })
+                              : null,
                         );
                       }),
-                      if (_paymentId == 'CREDIT_CARD' && _selectedPayment(payments) != null) ...[
+                      if (_paymentId == 'CREDIT_CARD' &&
+                          _selectedPayment(payments) != null) ...[
                         const SizedBox(height: 6),
                         _CardPaymentForm(
                           payment: _selectedPayment(payments)!,
@@ -730,19 +1103,37 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           expiryController: _cardExpiryController,
                           cvvController: _cardCvvController,
                           installments: _cardInstallments,
-                          onInstallmentsChanged: (value) => setState(() => _cardInstallments = value),
+                          onInstallmentsChanged: (value) =>
+                              setState(() => _cardInstallments = value),
                         ),
                       ],
-                      if (_needsPaymentTerm(payments, _paymentId) && paymentTerms.isNotEmpty) ...[
+                      if (_needsPaymentTerm(payments, _paymentId) &&
+                          paymentTerms.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         DropdownButtonFormField<String>(
-                          value: _paymentTerm != null && paymentTerms.any((e) => stringValue(e['code']) == _paymentTerm) ? _paymentTerm : null,
-                          decoration: const InputDecoration(labelText: 'Condição / prazo'),
-                          items: paymentTerms.map((term) => DropdownMenuItem<String>(
-                            value: stringValue(term['code']),
-                            child: Text('${stringValue(term['code'])} · ${stringValue(term['name'])}'),
-                          )).toList(),
-                          onChanged: (value) => setState(() => _paymentTerm = value),
+                          value:
+                              _paymentTerm != null &&
+                                  paymentTerms.any(
+                                    (e) =>
+                                        stringValue(e['code']) == _paymentTerm,
+                                  )
+                              ? _paymentTerm
+                              : null,
+                          decoration: const InputDecoration(
+                            labelText: 'Condição / prazo',
+                          ),
+                          items: paymentTerms
+                              .map(
+                                (term) => DropdownMenuItem<String>(
+                                  value: stringValue(term['code']),
+                                  child: Text(
+                                    '${stringValue(term['code'])} · ${stringValue(term['name'])}',
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) =>
+                              setState(() => _paymentTerm = value),
                         ),
                       ],
                       if (_isCashPayment(payments, _paymentId)) ...[
@@ -752,8 +1143,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(14),
-                            color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.45),
-                            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest
+                                .withOpacity(.45),
+                            border: Border.all(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.outlineVariant,
+                            ),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -761,8 +1159,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
                               SwitchListTile.adaptive(
                                 value: _needsChange,
                                 contentPadding: EdgeInsets.zero,
-                                title: const Text('Precisa de troco?', style: TextStyle(fontWeight: FontWeight.w800)),
-                                subtitle: const Text('Informe o valor que será entregue ao motorista.'),
+                                title: const Text(
+                                  'Precisa de troco?',
+                                  style: TextStyle(fontWeight: FontWeight.w800),
+                                ),
+                                subtitle: const Text(
+                                  'Informe o valor que será entregue ao motorista.',
+                                ),
                                 onChanged: (value) => setState(() {
                                   _needsChange = value;
                                   if (!value) _changeForController.clear();
@@ -772,8 +1175,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                 const SizedBox(height: 6),
                                 TextField(
                                   controller: _changeForController,
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.allow(
+                                      RegExp(r'[0-9.,]'),
+                                    ),
+                                  ],
                                   decoration: const InputDecoration(
                                     labelText: 'Troco para quanto?',
                                     hintText: 'Ex.: 100,00',
@@ -799,7 +1209,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
               maxLength: 500,
               textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
-                hintText: 'Ex.: chamar no interfone, entregar na portaria, não substituir itens...',
+                hintText:
+                    'Ex.: chamar no interfone, entregar na portaria, não substituir itens...',
               ),
             ),
           ),
@@ -808,20 +1219,41 @@ class _CheckoutPageState extends State<CheckoutPage> {
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.all(14),
         child: FilledButton.icon(
-          onPressed: boolValue(capabilities['order_submit']) && freightOk && minimumReached && _paymentId != null && !_submitting ? _submit : null,
+          onPressed:
+              boolValue(capabilities['order_submit']) &&
+                  freightOk &&
+                  minimumReached &&
+                  _paymentId != null &&
+                  !_submitting
+              ? _submit
+              : null,
           icon: _submitting
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
               : const Icon(Icons.lock_outline),
-          label: Text(boolValue(capabilities['order_submit']) ? (_submitting ? 'Confirmando pedido...' : 'Confirmar pedido · ${_money(numberValue(summary['total']))}') : 'Confirmação do pedido indisponível'),
+          label: Text(
+            boolValue(capabilities['order_submit'])
+                ? (_submitting
+                      ? 'Confirmando pedido...'
+                      : 'Confirmar pedido · ${_money(numberValue(summary['total']))}')
+                : 'Confirmação do pedido indisponível',
+          ),
         ),
       ),
     );
   }
+
   Widget _buildCompleted(BuildContext context, Map<String, dynamic> data) {
     final order = mapValue(data['order']);
     final payment = mapValue(data['payment']);
     final paymentError = nullableString(data['payment_error']);
-    final number = stringValue(order['number'], fallback: '${order['id'] ?? ''}');
+    final number = stringValue(
+      order['number'],
+      fallback: '${order['id'] ?? ''}',
+    );
     final pix = stringValue(payment['pix_code']);
     final boleto = stringValue(payment['boleto_barcode']);
     final boletoUrl = stringValue(payment['boleto_url']);
@@ -832,33 +1264,122 @@ class _CheckoutPageState extends State<CheckoutPage> {
         children: [
           const Icon(Icons.check_circle, size: 72, color: Color(0xFF15803D)),
           const SizedBox(height: 12),
-          Text('Pedido #$number recebido!', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+          Text(
+            'Pedido #$number recebido!',
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 6),
-          Text('Total ${_money(numberValue(order['total']))}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          Text(
+            'Total ${_money(numberValue(order['total']))}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
           if (paymentError != null && paymentError.isNotEmpty) ...[
             const SizedBox(height: 16),
-            Card(color: Theme.of(context).colorScheme.errorContainer, child: Padding(padding: const EdgeInsets.all(14), child: Text('O pedido foi criado, mas o pagamento precisa de atenção: $paymentError'))),
+            Card(
+              color: Theme.of(context).colorScheme.errorContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Text(
+                  'O pedido foi criado, mas o pagamento precisa de atenção: $paymentError',
+                ),
+              ),
+            ),
           ],
           if (pix.isNotEmpty) ...[
             const SizedBox(height: 16),
-            Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              const Text('PIX copia e cola', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-              const SizedBox(height: 8), SelectableText(pix), const SizedBox(height: 10),
-              OutlinedButton.icon(onPressed: () { Clipboard.setData(ClipboardData(text: pix)); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Código PIX copiado.'))); }, icon: const Icon(Icons.copy), label: const Text('Copiar PIX')),
-            ]))),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'PIX copia e cola',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SelectableText(pix),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: pix));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Código PIX copiado.')),
+                        );
+                      },
+                      icon: const Icon(Icons.copy),
+                      label: const Text('Copiar PIX'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
           if (boleto.isNotEmpty || boletoUrl.isNotEmpty) ...[
             const SizedBox(height: 16),
-            Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              const Text('Boleto', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-              if (boleto.isNotEmpty) ...[const SizedBox(height: 8), SelectableText(boleto), const SizedBox(height: 10), OutlinedButton.icon(onPressed: () { Clipboard.setData(ClipboardData(text: boleto)); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Código do boleto copiado.'))); }, icon: const Icon(Icons.copy), label: const Text('Copiar código'))],
-              if (boletoUrl.isNotEmpty) ...[const SizedBox(height: 8), SelectableText(boletoUrl)],
-            ]))),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Boleto',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
+                    if (boleto.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      SelectableText(boleto),
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: boleto));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Código do boleto copiado.'),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.copy),
+                        label: const Text('Copiar código'),
+                      ),
+                    ],
+                    if (boletoUrl.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      SelectableText(boletoUrl),
+                    ],
+                  ],
+                ),
+              ),
+            ),
           ],
           const SizedBox(height: 18),
-          FilledButton.icon(onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.shopping_bag_outlined), label: const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('Continuar na loja'))),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.shopping_bag_outlined),
+            label: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text('Continuar na loja'),
+            ),
+          ),
           const SizedBox(height: 6),
-          Text('Você pode acompanhar este pedido em Conta > Meus pedidos.', textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          Text(
+            'Você pode acompanhar este pedido em Conta > Meus pedidos.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
         ],
       ),
     );
@@ -887,15 +1408,22 @@ class _CardPaymentForm extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final options = listValue(payment['installments']);
-    final counts = options.map((e) => int.tryParse(stringValue(e['count'])) ?? 0).where((e) => e > 0).toSet();
-    final effective = counts.contains(installments) ? installments : (counts.isNotEmpty ? counts.first : 1);
+    final counts = options
+        .map((e) => int.tryParse(stringValue(e['count'])) ?? 0)
+        .where((e) => e > 0)
+        .toSet();
+    final effective = counts.contains(installments)
+        ? installments
+        : (counts.isNotEmpty ? counts.first : 1);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.35),
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withOpacity(.35),
       ),
       child: Column(
         children: [
@@ -903,7 +1431,10 @@ class _CardPaymentForm extends StatelessWidget {
             controller: numberController,
             keyboardType: TextInputType.number,
             autofillHints: const [AutofillHints.creditCardNumber],
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(19)],
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(19),
+            ],
             decoration: const InputDecoration(labelText: 'Número do cartão'),
           ),
           const SizedBox(height: 8),
@@ -911,31 +1442,44 @@ class _CardPaymentForm extends StatelessWidget {
             controller: holderController,
             textCapitalization: TextCapitalization.characters,
             autofillHints: const [AutofillHints.creditCardName],
-            decoration: const InputDecoration(labelText: 'Nome impresso no cartão'),
+            decoration: const InputDecoration(
+              labelText: 'Nome impresso no cartão',
+            ),
           ),
           const SizedBox(height: 8),
-          Row(children: [
-            Expanded(
-              child: TextField(
-                controller: expiryController,
-                keyboardType: TextInputType.number,
-                autofillHints: const [AutofillHints.creditCardExpirationDate],
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)],
-                decoration: const InputDecoration(labelText: 'Validade', hintText: 'MMAA'),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: expiryController,
+                  keyboardType: TextInputType.number,
+                  autofillHints: const [AutofillHints.creditCardExpirationDate],
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(4),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'Validade',
+                    hintText: 'MMAA',
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: cvvController,
-                keyboardType: TextInputType.number,
-                obscureText: true,
-                autofillHints: const [AutofillHints.creditCardSecurityCode],
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)],
-                decoration: const InputDecoration(labelText: 'CVV'),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: cvvController,
+                  keyboardType: TextInputType.number,
+                  obscureText: true,
+                  autofillHints: const [AutofillHints.creditCardSecurityCode],
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(4),
+                  ],
+                  decoration: const InputDecoration(labelText: 'CVV'),
+                ),
               ),
-            ),
-          ]),
+            ],
+          ),
           const SizedBox(height: 8),
           if (options.isNotEmpty)
             DropdownButtonFormField<int>(
@@ -946,17 +1490,29 @@ class _CardPaymentForm extends StatelessWidget {
                 final value = numberValue(item['value']);
                 final total = numberValue(item['total']);
                 final noInterest = boolValue(item['no_interest']);
-                final label = '$count x ${_money(value)}${noInterest ? ' sem juros' : ' · total ${_money(total)}'}';
+                final label =
+                    '$count x ${_money(value)}${noInterest ? ' sem juros' : ' · total ${_money(total)}'}';
                 return DropdownMenuItem<int>(value: count, child: Text(label));
               }).toList(),
-              onChanged: (value) { if (value != null) onInstallmentsChanged(value); },
+              onChanged: (value) {
+                if (value != null) onInstallmentsChanged(value);
+              },
             )
           else
-            const Align(alignment: Alignment.centerLeft, child: Text('1x no cartão')),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('1x no cartão'),
+            ),
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerLeft,
-            child: Text('Os dados do cartão são tokenizados diretamente no Pagar.me; o número e o CVV não são enviados ao ecommerce.', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            child: Text(
+              'Os dados do cartão são tokenizados diretamente no Pagar.me; o número e o CVV não são enviados ao ecommerce.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
           ),
         ],
       ),
@@ -965,30 +1521,53 @@ class _CardPaymentForm extends StatelessWidget {
 }
 
 class _CheckoutCard extends StatelessWidget {
-  const _CheckoutCard({required this.title, required this.icon, required this.child});
+  const _CheckoutCard({
+    required this.title,
+    required this.icon,
+    required this.child,
+  });
   final String title;
   final IconData icon;
   final Widget child;
   @override
   Widget build(BuildContext context) => Card(
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.all(15),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
+    margin: EdgeInsets.zero,
+    child: Padding(
+      padding: const EdgeInsets.all(15),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
               Icon(icon, color: Theme.of(context).colorScheme.primary),
               const SizedBox(width: 8),
-              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16))),
-            ]),
-            const SizedBox(height: 12),
-            child,
-          ]),
-        ),
-      );
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    ),
+  );
 }
 
 class _SummaryRow extends StatelessWidget {
-  const _SummaryRow(this.label, this.value, {this.strong = false, this.suffix, this.prefixMinus = false});
+  const _SummaryRow(
+    this.label,
+    this.value, {
+    this.strong = false,
+    this.suffix,
+    this.prefixMinus = false,
+  });
   final String label;
   final double value;
   final bool strong;
@@ -996,12 +1575,24 @@ class _SummaryRow extends StatelessWidget {
   final bool prefixMinus;
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(children: [
-          Expanded(child: Text(label, style: strong ? const TextStyle(fontWeight: FontWeight.w900) : null)),
-          Text(suffix ?? '${prefixMinus ? '- ' : ''}${_money(value.abs())}', style: strong ? const TextStyle(fontSize: 19, fontWeight: FontWeight.w900) : const TextStyle(fontWeight: FontWeight.w700)),
-        ]),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: strong ? const TextStyle(fontWeight: FontWeight.w900) : null,
+          ),
+        ),
+        Text(
+          suffix ?? '${prefixMinus ? '- ' : ''}${_money(value.abs())}',
+          style: strong
+              ? const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)
+              : const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ],
+    ),
+  );
 }
 
 String _addressLine(Map<String, dynamic> a) {
@@ -1018,7 +1609,9 @@ bool _isCashPayment(List<Map<String, dynamic>> payments, String? selectedId) {
   for (final p in payments) {
     if (stringValue(p['id']) != selectedId) continue;
     final name = stringValue(p['name']).toUpperCase();
-    return name.contains('DINHEIRO') || name.contains('ESPÉCIE') || name.contains('ESPECIE');
+    return name.contains('DINHEIRO') ||
+        name.contains('ESPÉCIE') ||
+        name.contains('ESPECIE');
   }
   return false;
 }
@@ -1033,7 +1626,10 @@ double? _parseMoney(String raw) {
   return double.tryParse(value);
 }
 
-bool _needsPaymentTerm(List<Map<String, dynamic>> payments, String? selectedId) {
+bool _needsPaymentTerm(
+  List<Map<String, dynamic>> payments,
+  String? selectedId,
+) {
   if (selectedId == null) return false;
   for (final p in payments) {
     if (stringValue(p['id']) != selectedId) continue;
@@ -1043,19 +1639,27 @@ bool _needsPaymentTerm(List<Map<String, dynamic>> payments, String? selectedId) 
   return false;
 }
 
-String _dateSql(DateTime value) => '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+String _dateSql(DateTime value) =>
+    '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
 
 IconData _paymentIcon(String id) {
   switch (id.toUpperCase()) {
-    case 'PIX': return Icons.qr_code_2;
-    case 'CREDIT_CARD': return Icons.credit_card;
-    case 'GOOGLE_PAY': return Icons.account_balance_wallet_outlined;
-    case 'APPLE_PAY': return Icons.account_balance_wallet_outlined;
-    case 'BOLETO': return Icons.receipt_long;
-    default: return Icons.wallet_outlined;
+    case 'PIX':
+      return Icons.qr_code_2;
+    case 'CREDIT_CARD':
+      return Icons.credit_card;
+    case 'GOOGLE_PAY':
+      return Icons.account_balance_wallet_outlined;
+    case 'BOLETO':
+      return Icons.receipt_long;
+    default:
+      return Icons.wallet_outlined;
   }
 }
 
-String _weekdayPt(DateTime value) => const ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'][value.weekday - 1];
-String _dateBr(DateTime value) => '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
-String _money(double value) => 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
+String _weekdayPt(DateTime value) =>
+    const ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'][value.weekday - 1];
+String _dateBr(DateTime value) =>
+    '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+String _money(double value) =>
+    'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';

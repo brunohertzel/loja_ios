@@ -4,17 +4,11 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../config/app_environment.dart';
-import '../config/platform_info.dart';
 import '../device/device_service.dart';
 import '../storage/secure_session_store.dart';
 
 class ApiException implements Exception {
-  const ApiException(
-    this.message, {
-    this.statusCode,
-    this.code,
-    this.payload,
-  });
+  const ApiException(this.message, {this.statusCode, this.code, this.payload});
 
   final String message;
   final int? statusCode;
@@ -43,14 +37,17 @@ class ApiClient {
   void ensureConfigured() {
     if (!AppEnvironment.isConfigured) {
       throw const ApiException(
-        'API Mobile nao configurada. Configure tooling/mobile_app_config.json e execute tooling/apply_local_config.ps1.',
+        'A conexão com a loja não foi configurada. Entre em contato com o suporte da loja.',
         code: 'API_NOT_CONFIGURED',
       );
     }
   }
 
-  Future<Map<String, dynamic>> bootstrap() =>
-      get('/bootstrap.php', authenticated: false);
+  Future<Map<String, dynamic>> bootstrap() => get(
+    '/bootstrap.php',
+    authenticated: false,
+    timeout: const Duration(seconds: 45),
+  );
 
   Future<Map<String, dynamic>> health() =>
       get('/health.php', authenticated: false);
@@ -64,15 +61,13 @@ class ApiClient {
     final token = authenticated ? await store.accessToken : null;
     try {
       final response = await _http
-          .get(
-            Uri.parse('$baseUrl$path'),
-            headers: _headers(token: token),
-          )
+          .get(Uri.parse('$baseUrl$path'), headers: _headers(token: token))
           .timeout(timeout);
-      return _decode(response);
+      final result = _decode(response);
+      return result;
     } on TimeoutException {
-      throw const ApiException(
-        'Tempo esgotado ao comunicar com a API Mobile.',
+      throw ApiException(
+        'Tempo esgotado ao comunicar com a API Mobile. Endereço: $baseUrl$path',
         code: 'NETWORK_TIMEOUT',
       );
     } on ApiException {
@@ -110,10 +105,11 @@ class ApiClient {
             body: jsonEncode(payload),
           )
           .timeout(timeout);
-      return _decode(response);
+      final result = _decode(response);
+      return result;
     } on TimeoutException {
-      throw const ApiException(
-        'Tempo esgotado ao comunicar com a API Mobile.',
+      throw ApiException(
+        'Tempo esgotado ao comunicar com a API Mobile. Endereço: $baseUrl$path',
         code: 'NETWORK_TIMEOUT',
       );
     } on ApiException {
@@ -137,24 +133,22 @@ class ApiClient {
     if (text.startsWith('/')) {
       return base.replace(path: text, query: null, fragment: null).toString();
     }
-    return base
-        .replace(path: '/$text', query: null, fragment: null)
-        .toString();
+    return base.replace(path: '/$text', query: null, fragment: null).toString();
   }
 
   Map<String, String> _headers({String? token}) => <String, String>{
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'X-Soft-Platform': AppEnvironment.platform,
-        'X-Soft-App-Version': device.appVersion,
-        'X-Soft-App-Build': device.appBuild,
-        'X-Soft-Device-Id': device.deviceId,
-        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-        // Fallback proprio da API Mobile. Alguns Apache/XAMPP/CGI removem
-        // Authorization antes de chegar ao PHP; o servidor aceita este
-        // header somente para o token da sessao Mobile.
-        if (token != null && token.isNotEmpty) 'X-Soft-Access-Token': token,
-      };
+    'Accept': 'application/json',
+    'Content-Type': 'application/json',
+    'X-Soft-Platform': AppEnvironment.platform,
+    'X-Soft-App-Version': device.appVersion,
+    'X-Soft-App-Build': device.appBuild,
+    'X-Soft-Device-Id': device.deviceId,
+    if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+    // Fallback proprio da API Mobile. Alguns Apache/XAMPP/CGI removem
+    // Authorization antes de chegar ao PHP; o servidor aceita este
+    // header somente para o token da sessao Mobile.
+    if (token != null && token.isNotEmpty) 'X-Soft-Access-Token': token,
+  };
 
   Map<String, dynamic> _decode(http.Response response) {
     Map<String, dynamic>? payload;
@@ -168,7 +162,8 @@ class ApiClient {
     }
 
     final result = payload ?? <String, dynamic>{};
-    final failed = response.statusCode < 200 ||
+    final failed =
+        response.statusCode < 200 ||
         response.statusCode >= 300 ||
         result['ok'] == false;
 
@@ -176,7 +171,9 @@ class ApiClient {
       final code = result['error']?.toString();
       final serverMessage = result['message']?.toString().trim() ?? '';
       throw ApiException(
-        serverMessage.isNotEmpty ? serverMessage : _friendlyMessage(code, response.statusCode),
+        serverMessage.isNotEmpty
+            ? serverMessage
+            : _friendlyMessage(code, response.statusCode),
         statusCode: response.statusCode,
         code: code,
         payload: result,
@@ -205,9 +202,9 @@ class ApiClient {
       case 'CUSTOMER_INACTIVE':
         return 'Conta inativa.';
       case 'PLATFORM_NOT_LICENSED':
-        return '${PlatformInfo.label} nao esta incluido na licenca do modulo Mobile.';
+        return 'Plataforma nao esta incluida na licenca do modulo Mobile.';
       case 'PLATFORM_DISABLED':
-        return '${PlatformInfo.label} esta desabilitado no configurador do modulo Mobile.';
+        return 'Plataforma esta desabilitada no configurador do modulo Mobile.';
       case 'MOBILE_DISABLED':
         return 'O modulo Mobile esta desabilitado nesta loja.';
       case 'REFRESH_TOKEN_INVALID_OR_EXPIRED':

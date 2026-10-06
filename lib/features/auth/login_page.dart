@@ -1,9 +1,9 @@
+import '../../core/config/platform_info.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/config/generated_app_config.dart';
-import '../../core/config/platform_info.dart';
 import '../../core/models/bootstrap_config.dart';
 import '../../core/network/api_client.dart';
 import '../../core/storage/secure_session_store.dart';
@@ -78,16 +78,15 @@ class _LoginPageState extends State<LoginPage> {
       _remember = widget.bootstrap.security.rememberMe
           ? (remembered || refresh == null || refresh.isEmpty)
           : false;
-      _canBiometric = widget.bootstrap.security.biometrics &&
+      _canBiometric =
+          widget.bootstrap.security.biometrics &&
           biometricEnabled &&
           refresh != null &&
           refresh.isNotEmpty &&
           biometricAvailable;
     });
 
-    if (widget.autoTryBiometric &&
-        _canBiometric &&
-        !_autoBiometricAttempted) {
+    if (widget.autoTryBiometric && _canBiometric && !_autoBiometricAttempted) {
       _autoBiometricAttempted = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && !_loading) _loginBiometric();
@@ -166,18 +165,17 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-
   Future<void> _openRegister() async {
     if (!widget.bootstrap.security.registrationEnabled) {
-      setState(() => _error = 'Novos cadastros pelo aplicativo estão desabilitados.');
+      setState(
+        () => _error = 'Novos cadastros pelo aplicativo estão desabilitados.',
+      );
       return;
     }
     final ok = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => RegisterPage(
-          auth: widget.auth,
-          bootstrap: widget.bootstrap,
-        ),
+        builder: (_) =>
+            RegisterPage(auth: widget.auth, bootstrap: widget.bootstrap),
       ),
     );
     if (ok == true && mounted) {
@@ -187,8 +185,12 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _loginGoogle() async {
     final cfg = widget.bootstrap.security;
-    if (!cfg.googleLoginEnabled || GeneratedAppConfig.googleWebClientId.trim().isEmpty) {
-      setState(() => _error = 'Login com Google ainda não foi configurado no módulo Mobile.');
+    if (!cfg.googleLoginEnabled ||
+        GeneratedAppConfig.googleWebClientId.trim().isEmpty) {
+      setState(
+        () => _error =
+            'Login com Google ainda não foi configurado no módulo Mobile.',
+      );
       return;
     }
     setState(() {
@@ -205,11 +207,15 @@ class _LoginPageState extends State<LoginPage> {
       final auth = await account.authentication;
       final idToken = auth.idToken;
       if (idToken == null || idToken.isEmpty) {
-        throw const ApiException('O Google não retornou um token de identidade.', code: 'INVALID_GOOGLE_TOKEN');
+        throw const ApiException(
+          'O Google não retornou um token de identidade.',
+          code: 'INVALID_GOOGLE_TOKEN',
+        );
       }
       try {
-        final rememberGoogle =
-            widget.bootstrap.security.rememberMe ? _remember : true;
+        final rememberGoogle = widget.bootstrap.security.rememberMe
+            ? _remember
+            : true;
         await widget.auth.googleLogin(
           idToken: idToken,
           rememberMe: rememberGoogle,
@@ -238,7 +244,8 @@ class _LoginPageState extends State<LoginPage> {
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (e) {
-      if (mounted) setState(() => _error = 'Não foi possível entrar com o Google. $e');
+      if (mounted)
+        setState(() => _error = 'Não foi possível entrar com o Google. $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -247,12 +254,16 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _forgotPassword() async {
     final raw = widget.bootstrap.security.passwordRecoveryUrl?.trim() ?? '';
     if (raw.isEmpty) {
-      if (mounted) setState(() => _error = 'Recuperação de senha não está disponível nesta loja.');
+      if (mounted)
+        setState(
+          () => _error = 'Recuperação de senha não está disponível nesta loja.',
+        );
       return;
     }
     final uri = Uri.tryParse(raw);
     if (uri == null) {
-      if (mounted) setState(() => _error = 'Endereço de recuperação de senha inválido.');
+      if (mounted)
+        setState(() => _error = 'Endereço de recuperação de senha inválido.');
       return;
     }
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -317,9 +328,7 @@ class _LoginPageState extends State<LoginPage> {
                       Text(
                         GeneratedAppConfig.appName,
                         textAlign: TextAlign.center,
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineSmall
+                        style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(height: 5),
@@ -327,8 +336,8 @@ class _LoginPageState extends State<LoginPage> {
                         'Confirme sua identidade para entrar',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                       const SizedBox(height: 26),
                       TextField(
@@ -357,7 +366,9 @@ class _LoginPageState extends State<LoginPage> {
                             onPressed: () =>
                                 setState(() => _obscure = !_obscure),
                             icon: Icon(
-                              _obscure ? Icons.visibility : Icons.visibility_off,
+                              _obscure
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
                             ),
                           ),
                         ),
@@ -378,23 +389,24 @@ class _LoginPageState extends State<LoginPage> {
                           onChanged: _loading
                               ? null
                               : (value) =>
-                                  setState(() => _remember = value ?? false),
+                                    setState(() => _remember = value ?? false),
                         ),
                       if (_error != null) ...[
                         const SizedBox(height: 4),
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .errorContainer
-                                .withOpacity(.55),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.errorContainer.withOpacity(.55),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
                             _error!,
                             style: TextStyle(
-                              color: Theme.of(context).colorScheme.onErrorContainer,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onErrorContainer,
                             ),
                           ),
                         ),
@@ -408,7 +420,9 @@ class _LoginPageState extends State<LoginPage> {
                               ? const SizedBox(
                                   width: 22,
                                   height: 22,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Text('ENTRAR'),
                         ),
@@ -452,8 +466,8 @@ class _LoginPageState extends State<LoginPage> {
                         '${widget.api.device.appBuild}',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),

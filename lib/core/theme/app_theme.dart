@@ -39,44 +39,62 @@ class AppTheme {
         : rawSecondary;
 
     final onSurface = dark ? const Color(0xFFF4F6F8) : const Color(0xFF202124);
-    final onSurfaceVariant = dark ? const Color(0xFFC8D0DA) : const Color(0xFF5F6368);
+    final onSurfaceVariant = dark
+        ? const Color(0xFFC8D0DA)
+        : const Color(0xFF5F6368);
     final onPrimary = _contrast(primary);
     final onSecondary = _contrast(secondary);
 
-    final scheme = ColorScheme.fromSeed(
-      seedColor: primary,
-      brightness: brightness,
-    ).copyWith(
-      primary: primary,
-      onPrimary: onPrimary,
-      secondary: secondary,
-      onSecondary: onSecondary,
-      surface: surface,
-      onSurface: onSurface,
-      onSurfaceVariant: onSurfaceVariant,
-      surfaceContainerLowest: dark ? const Color(0xFF0D1014) : const Color(0xFFFAFBFC),
-      surfaceContainerLow: dark ? const Color(0xFF12171D) : const Color(0xFFF6F8FA),
-      surfaceContainer: dark ? const Color(0xFF171D24) : const Color(0xFFF1F4F7),
-      surfaceContainerHigh: dark ? const Color(0xFF1C232C) : const Color(0xFFEBEFF3),
-      surfaceContainerHighest: dark ? const Color(0xFF232C36) : const Color(0xFFE5EAF0),
-      primaryContainer: dark
-          ? Color.alphaBlend(primary.withOpacity(.20), const Color(0xFF171D24))
-          : null,
-      onPrimaryContainer: dark ? onSurface : null,
-      secondaryContainer: dark
-          ? Color.alphaBlend(secondary.withOpacity(.16), const Color(0xFF171D24))
-          : null,
-      onSecondaryContainer: dark ? onSurface : null,
-      tertiaryContainer: dark ? const Color(0xFF202630) : null,
-      onTertiaryContainer: dark ? onSurface : null,
-      outline: dark ? const Color(0xFF6B7685) : null,
-      outlineVariant: dark ? const Color(0xFF343C47) : null,
-    );
-
-    final baseText = ThemeData(brightness: brightness).textTheme.apply(
-          bodyColor: onSurface,
-          displayColor: onSurface,
+    final scheme =
+        ColorScheme.fromSeed(
+          seedColor: primary,
+          brightness: brightness,
+        ).copyWith(
+          primary: primary,
+          onPrimary: onPrimary,
+          secondary: secondary,
+          onSecondary: onSecondary,
+          surface: surface,
+          onSurface: onSurface,
+          onSurfaceVariant: onSurfaceVariant,
+          surfaceContainerLowest: dark
+              ? const Color(0xFF0D1014)
+              : const Color(0xFFFAFBFC),
+          surfaceContainerLow: dark
+              ? const Color(0xFF12171D)
+              : const Color(0xFFF6F8FA),
+          surfaceContainer: dark
+              ? const Color(0xFF171D24)
+              : const Color(0xFFF1F4F7),
+          surfaceContainerHigh: dark
+              ? const Color(0xFF1C232C)
+              : const Color(0xFFEBEFF3),
+          surfaceContainerHighest: dark
+              ? const Color(0xFF232C36)
+              : const Color(0xFFE5EAF0),
+          primaryContainer: dark
+              ? Color.alphaBlend(
+                  primary.withOpacity(.20),
+                  const Color(0xFF171D24),
+                )
+              : null,
+          onPrimaryContainer: dark ? onSurface : null,
+          secondaryContainer: dark
+              ? Color.alphaBlend(
+                  secondary.withOpacity(.16),
+                  const Color(0xFF171D24),
+                )
+              : null,
+          onSecondaryContainer: dark ? onSurface : null,
+          tertiaryContainer: dark ? const Color(0xFF202630) : null,
+          onTertiaryContainer: dark ? onSurface : null,
+          outline: dark ? const Color(0xFF6B7685) : null,
+          outlineVariant: dark ? const Color(0xFF343C47) : null,
         );
+
+    final baseText = ThemeData(
+      brightness: brightness,
+    ).textTheme.apply(bodyColor: onSurface, displayColor: onSurface);
 
     return ThemeData(
       useMaterial3: true,
@@ -124,7 +142,9 @@ class AppTheme {
         ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: dark ? const Color(0xFF202630) : const Color(0xFFF2F5F8),
+        backgroundColor: dark
+            ? const Color(0xFF202630)
+            : const Color(0xFFF2F5F8),
         labelStyle: TextStyle(color: onSurface),
         side: BorderSide(
           color: dark ? const Color(0xFF46505E) : const Color(0xFFD7DFE8),

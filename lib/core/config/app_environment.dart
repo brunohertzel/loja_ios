@@ -12,8 +12,9 @@ class AppEnvironment {
     defaultValue: '',
   );
 
-  static String get apiBaseUrl =>
-      _apiFromBuild.trim().isNotEmpty ? _apiFromBuild.trim() : GeneratedAppConfig.apiBaseUrl;
+  static String get apiBaseUrl => _apiFromBuild.trim().isNotEmpty
+      ? _apiFromBuild.trim()
+      : GeneratedAppConfig.apiBaseUrl;
 
   static String get normalizedApiBaseUrl =>
       apiBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
